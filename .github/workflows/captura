@@ -1,0 +1,54 @@
+name: Captura
+
+# El minimo de GitHub Actions es 5 minutos. El cron NO es puntual: se retrasa
+# habitualmente y bajo carga alta GitHub omite corridas. El analisis lo tolera
+# porque cada captura se pondera por los minutos que realmente representa.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:        # permite disparar a mano desde la pestana Actions
+
+# Evita que dos corridas se pisen al hacer push sobre la misma rama.
+concurrency:
+  group: captura
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  capturar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Capturar
+        run: python scripts/captura.py
+
+      - name: Publicar
+        run: |
+          git config user.name  "monitor-carga[bot]"
+          git config user.email "monitor-carga@users.noreply.github.com"
+          git add serie estado metadatos docs/data
+          if git diff --staged --quiet; then
+            echo "sin cambios que publicar"
+            exit 0
+          fi
+          git commit -m "captura $(TZ=America/Santiago date '+%Y-%m-%d %H:%M')"
+          # Reintenta si otra corrida hizo push mientras tanto
+          for i in 1 2 3; do
+            git pull --rebase --autostash && git push && exit 0
+            echo "reintento $i"
+            sleep 5
+          done
+          exit 1
