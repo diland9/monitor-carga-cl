@@ -20,6 +20,7 @@ Que escribe cada corrida:
 Codigos de estado: 0 disponible · 1 ocupado · 2 fuera de linea · 3 no disponible
 """
 
+import gzip
 import json
 import os
 import sys
@@ -129,6 +130,90 @@ def aplanar(data, ts):
     return df
 
 
+
+CAMPOS_META = {
+    "n": "location_nombre", "cm": "comuna", "rg": "region", "op": "opc",
+    "es": "estandar", "kw": "pot_max_kw", "tc": "tipo_corriente",
+    "la": "latitud", "lo": "longitud", "pr": "precio_clp_kwh",
+    "lid": "location_id", "mk": "marca", "dx": "empresa_distribuidora",
+    "irve": "folio_IRVE", "pv": "institucion_privada", "dir": "direccion",
+}
+
+# Operadores de prueba que el registro publica pero no corresponden a
+# infraestructura real. Se marcan como excluidos en los metadatos en vez de
+# borrarse de la serie: asi el largo del string de estados no cambia y las
+# capturas ya tomadas siguen siendo validas.
+OPC_EXCLUIDOS = {"nmaes99"}
+
+
+def es_excluido(nombre):
+    return str(nombre).strip().lower() in OPC_EXCLUIDOS
+
+
+def escribir_meta(df, ids, destino):
+    """Metadatos fijos de cada conector, alineados al orden de ids.
+
+    Se reescribe una vez al dia. Va aparte de la serie porque cambia poco y
+    pesa mucho mas: mantenerlo separado evita reescribir ~300 KB cada 5 min.
+    """
+    m = df.set_index("connector_id")
+    regs = []
+    for cid in ids:
+        if cid not in m.index:
+            regs.append({"id": int(cid)})
+            continue
+        r = m.loc[cid]
+        d = {"id": int(cid)}
+        for corto, largo in CAMPOS_META.items():
+            v = r.get(largo)
+            if pd.isna(v):
+                d[corto] = None
+            elif corto in ("la", "lo"):
+                try:
+                    d[corto] = round(float(v), 5)
+                except (TypeError, ValueError):
+                    d[corto] = None
+            elif corto in ("kw", "pr"):
+                d[corto] = float(v)
+            elif corto in ("lid", "irve"):
+                d[corto] = int(v)
+            elif corto == "pv":
+                d[corto] = bool(v)
+            else:
+                d[corto] = str(v)[:70]
+        if es_excluido(r.get("opc")):
+            d["ex"] = 1
+        regs.append(d)
+    n_ex = sum(1 for d in regs if d.get("ex"))
+    if n_ex:
+        print(f"  {n_ex} conectores marcados como excluidos (operador de prueba)")
+    payload = {"ids": [int(i) for i in ids], "meta": regs}
+    with gzip.open(destino, "wt", encoding="utf-8", compresslevel=9) as f:
+        json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+
+
+def escribir_hoy(carpeta_dia, ids, destino):
+    """Serie del dia en curso, reconstruida desde los .txt de la jornada.
+
+    Esto es lo que permite ver la evolucion intradiaria sin esperar a la
+    consolidacion nocturna. Solo lleva timestamps y estados: los metadatos
+    viven en meta.json.gz.
+    """
+    filas = []
+    for p in sorted(carpeta_dia.glob("*.txt")):
+        try:
+            ts, est = p.read_text().strip().split("\n")[:2]
+        except ValueError:
+            continue
+        if len(est) == len(ids):        # descarta capturas de un parque distinto
+            filas.append((ts, est))
+    filas.sort()
+    payload = {"ts": [t for t, _ in filas], "caps": [e for _, e in filas]}
+    with gzip.open(destino, "wt", encoding="utf-8", compresslevel=9) as f:
+        json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+    return len(filas)
+
+
 def main():
     ahora = datetime.now(TZ_CL)
     ts = ahora.strftime("%Y-%m-%d %H:%M:%S")
@@ -170,12 +255,23 @@ def main():
     # ---- metadatos: snapshot completo, uno al dia ----------------------------
     p_meta = RAIZ / "metadatos" / f"{fecha}.parquet"
     p_meta.parent.mkdir(parents=True, exist_ok=True)
-    if not p_meta.exists():
+    dir_datos = RAIZ / "docs" / "data"
+    dir_datos.mkdir(parents=True, exist_ok=True)
+    p_meta_json = dir_datos / "meta.json.gz"
+    if not p_meta.exists() or not p_meta_json.exists() or previo != ids:
         df.to_parquet(p_meta, index=False, compression="zstd")
-        print(f"metadatos del dia escritos ({p_meta.stat().st_size/1024:.0f} KB)")
+        escribir_meta(df, ids, p_meta_json)
+        print(f"metadatos actualizados ({p_meta_json.stat().st_size/1024:.0f} KB)")
+
+    # ---- serie del dia en curso, para el dashboard ---------------------------
+    n_hoy = escribir_hoy(p_ser.parent, ids, dir_datos / "hoy.json.gz")
 
     # ---- panel en vivo -------------------------------------------------------
-    cnt = [estados.count(str(k)) for k in range(4)]
+    # El operador de prueba se excluye de los agregados en vivo, igual que en
+    # el dashboard, para que las cifras de ambos coincidan.
+    df = df[~df["opc"].map(es_excluido)].copy()
+    estados_vivo = "".join(COD.get(e, "2") for e in df["estado"])
+    cnt = [estados_vivo.count(str(k)) for k in range(4)]
     inf = cnt[0] + cnt[1]
     por = lambda col: (df.groupby(col)["estado"]
                        .agg(n="size",
@@ -192,11 +288,18 @@ def main():
             t = t.head(top)
         return t.fillna(0).to_dict("records")
 
+    # Tramo de velocidad del sitio: el mas alto entre sus conectores.
+    # 0 lento <50 kW · 1 rapido 50-149 · 2 ultrarrapido >=150
+    kw = pd.to_numeric(df["pot_max_kw"], errors="coerce").fillna(0)
+    df = df.assign(kb=pd.cut(kw, [-1, 49.999, 149.999, 1e9],
+                             labels=[0, 1, 2]).astype("int8"))
     sitios = (df.assign(ocup=df["estado"].eq("OCUPADO"))
               .groupby(["location_id", "location_nombre", "comuna", "region",
                         "opc", "latitud", "longitud"], dropna=False)
               .agg(n=("connector_id", "size"), ocup=("ocup", "sum"),
-                   disp=("estado", lambda s: (s == "DISPONIBLE").sum()))
+                   disp=("estado", lambda s: (s == "DISPONIBLE").sum()),
+                   kb=("kb", "max"),
+                   priv=("institucion_privada", "max"))
               .reset_index())
 
     live = {
@@ -217,17 +320,18 @@ def main():
         "mapa": [
             {"la": float(r.latitud), "lo": float(r.longitud),
              "n": str(r.location_nombre)[:60], "cm": str(r.comuna),
-             "op": str(r.opc), "t": int(r.n), "o": int(r.ocup), "d": int(r.disp)}
+             "op": str(r.opc), "t": int(r.n), "o": int(r.ocup),
+             "d": int(r.disp), "kb": int(r.kb), "pv": bool(r.priv)}
             for r in sitios.itertuples()
             if pd.notna(r.latitud) and pd.notna(r.longitud)
         ],
     }
-    p_live = RAIZ / "docs" / "data" / "live.json"
-    p_live.parent.mkdir(parents=True, exist_ok=True)
+    p_live = dir_datos / "live.json"
     p_live.write_text(json.dumps(live, ensure_ascii=False, separators=(",", ":")))
 
     print(f"[{ts}] {len(df)} conectores | disp={cnt[0]} ocup={cnt[1]} "
-          f"fdl={cnt[2]} nd={cnt[3]} | FU={live['fu']}%")
+          f"fdl={cnt[2]} nd={cnt[3]} | FU={live['fu']}% | "
+          f"{n_hoy} capturas hoy")
     return 0
 
 

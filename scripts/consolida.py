@@ -33,13 +33,6 @@ TZ_CL = timezone(timedelta(hours=-4))
 RAIZ = Path(__file__).resolve().parent.parent
 NOMBRE = ["DISPONIBLE", "OCUPADO", "FUERA DE LINEA", "NO DISPONIBLE"]
 
-CAMPOS = {
-    "n": "location_nombre", "cm": "comuna", "rg": "region", "op": "opc",
-    "es": "estandar", "kw": "pot_max_kw", "tc": "tipo_corriente",
-    "la": "latitud", "lo": "longitud", "pr": "precio_clp_kwh",
-    "lid": "location_id", "mk": "marca", "dx": "empresa_distribuidora",
-    "irve": "folio_IRVE",
-}
 
 
 def leer_dia_suelto(carpeta):
@@ -156,37 +149,10 @@ def main():
     print(f"  {len(ser)} capturas | {w.sum()/60:.1f} h | intervalo mediano "
           f"{mediana:.1f} min | huecos {huecos}")
 
-    # Traspone: de una fila por captura a un string por conector
-    M = np.array([list(s) for s in ser["estados"]])      # capturas x conectores
-    series = ["".join(M[:, j]) for j in range(N)]
-
-    # Metadatos: el snapshot mas reciente
-    metas = sorted((RAIZ / "metadatos").glob("*.parquet"))
-    meta = pd.read_parquet(metas[-1]).drop_duplicates("connector_id").set_index("connector_id")
-
-    regs = []
-    for j, cid in enumerate(ids):
-        if cid not in meta.index:
-            continue
-        m = meta.loc[cid]
-        r = {"id": int(cid), "s": series[j]}
-        for corto, largo in CAMPOS.items():
-            v = m.get(largo)
-            if pd.isna(v):
-                r[corto] = None
-            elif corto in ("la", "lo"):
-                try:
-                    r[corto] = round(float(v), 5)
-                except (TypeError, ValueError):
-                    r[corto] = None
-            elif corto in ("kw", "pr"):
-                r[corto] = float(v)
-            elif corto in ("lid", "irve"):
-                r[corto] = int(v)
-            else:
-                r[corto] = str(v)[:70]
-        regs.append(r)
-
+    # Historico: mismo formato que hoy.json.gz (ts + capturas), sin metadatos.
+    # Los metadatos viven en meta.json.gz, que escribe captura.py una vez al dia.
+    # Mantenerlos separados evita duplicarlos y permite que el dashboard una
+    # historico + dia en curso sin conflictos.
     data = {
         "meta": {
             "fuente": "cargadorespublicos.cl/api/data (Ministerio de Energia / SEC)",
@@ -197,12 +163,10 @@ def main():
             "intervalo_min": round(mediana, 1),
             "horas": round(float(w.sum() / 60), 2),
             "huecos": huecos,
-            "n_conectores": len(regs),
+            "n_conectores": N,
         },
-        "ts": [t.strftime("%d-%m %H:%M") for t in ser["ts"]],
-        "tsfull": [t.strftime("%Y-%m-%d %H:%M") for t in ser["ts"]],
-        "w": [round(float(x), 3) for x in w],
-        "conectores": regs,
+        "ts": [t.strftime("%Y-%m-%d %H:%M:%S") for t in ser["ts"]],
+        "caps": ser["estados"].tolist(),
     }
 
     salida = RAIZ / "docs" / "data" / "historico.json.gz"
@@ -212,6 +176,10 @@ def main():
         f.write(crudo)
     print(f"  historico.json.gz: {salida.stat().st_size/1024/1024:.2f} MB "
           f"(sin comprimir {len(crudo)/1024/1024:.2f} MB)")
+
+    # Series por conector, solo para el resumen de portada
+    M = np.array([list(x) for x in ser["estados"]])
+    regs = [{"s": "".join(M[:, j])} for j in range(N)]
 
     # ---- resumen de portada -------------------------------------------------
     mo = md = mf = 0

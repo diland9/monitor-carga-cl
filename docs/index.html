@@ -45,8 +45,13 @@ aside{width:290px;flex:0 0 290px;background:var(--panel);border-right:1px solid 
 .fgroup{margin-bottom:16px}
 .flabel{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;
   text-transform:uppercase;letter-spacing:1px;color:var(--dim2);margin-bottom:6px}
-select,input[type=search]{width:100%;background:var(--panel2);border:1px solid var(--line);
+select,input[type=search],input[type=datetime-local]{width:100%;background:var(--panel2);border:1px solid var(--line);
   color:var(--txt);padding:7px 8px;border-radius:4px;font-family:Inter,sans-serif;font-size:12.5px}
+input[type=datetime-local]{color-scheme:dark;font-family:'JetBrains Mono',monospace;font-size:11.5px}
+.chip{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+  padding:4px 10px;border-radius:12px;cursor:pointer;font-size:11px}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.chip.on{background:var(--accent);color:var(--ink);border-color:var(--accent)}
 select:focus,input:focus{outline:2px solid var(--accent);outline-offset:1px}
 .chk{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:4px;cursor:pointer}
 .chk:hover{background:var(--panel2)}
@@ -65,6 +70,11 @@ button.act:hover{border-color:var(--accent);color:var(--accent)}
 .stat.warn .n{color:var(--fdl)}
 
 #map{flex:1;min-height:0;background:#0a1420}
+#map.claro .leaflet-marker-icon svg{filter:drop-shadow(0 0 1.5px rgba(0,0,0,.85))}
+.leaflet-control-layers{background:rgba(17,31,48,.96);color:var(--txt);
+  border:1px solid var(--line);border-radius:5px}
+.leaflet-control-layers-expanded{padding:9px 11px;font-size:12px}
+.leaflet-control-layers label{margin:3px 0}
 .legend{position:absolute;bottom:64px;right:14px;background:rgba(17,31,48,.94);
   border:1px solid var(--line);border-radius:5px;padding:9px 11px;font-size:11px;z-index:600;line-height:1.9}
 .legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
@@ -152,31 +162,60 @@ tbody tr:hover{background:var(--panel2)}
   <button data-t="terr">Comunas y regiones</button>
   <button data-t="oper">Operadores</button>
   <button data-t="conn">Conectores</button>
+  <button data-t="cnx">Ficha de conector</button>
   <button data-t="metodo">Metodología</button>
 </nav>
 
 <main>
 <aside id="side">
+  <div class="fgroup" style="border-bottom:1px solid var(--line);padding-bottom:14px">
+    <div class="flabel">Rango de análisis</div>
+    <label style="font-size:11px;color:var(--dim2)">Desde</label>
+    <input type="datetime-local" id="rDesde" step="300">
+    <label style="font-size:11px;color:var(--dim2);margin-top:6px;display:block">Hasta</label>
+    <input type="datetime-local" id="rHasta" step="300">
+    <div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">
+      <button class="chip" data-r="all">Todo</button>
+      <button class="chip" data-r="24">24 h</button>
+      <button class="chip" data-r="72">3 días</button>
+      <button class="chip" data-r="168">7 días</button>
+    </div>
+    <div id="rInfo" style="color:var(--dim2);font-size:11px;margin-top:8px;line-height:1.5"></div>
+  </div>
+
   <div class="fgroup">
     <div class="flabel">Universo de análisis</div>
     <select id="fUni">
-      <option value="op">Operativos — excluye inmóviles caídos</option>
-      <option value="mov">Solo con cambios de estado</option>
-      <option value="all">Todo el parque declarado</option>
+      <option value="op">A · Operativos (excluye caídos permanentes)</option>
+      <option value="all">B · Todos los conectores declarados</option>
+      <option value="pub">C · Públicos operativos (excluye institución privada)</option>
     </select>
-    <div style="color:var(--dim2);font-size:11px;margin-top:6px;line-height:1.5" id="uniDesc"></div>
+    <div id="uniDesc" style="color:var(--dim2);font-size:11px;margin-top:7px;
+      line-height:1.55;padding:8px 9px;background:var(--panel2);border-radius:4px;
+      border-left:2px solid var(--accent)"></div>
   </div>
   <div class="fgroup"><div class="flabel">Región</div><select id="fReg"></select></div>
   <div class="fgroup"><div class="flabel">Comuna</div><select id="fCom"></select></div>
   <div class="fgroup"><div class="flabel">Operador</div><select id="fOp"></select></div>
   <div class="fgroup"><div class="flabel">Estándar de conector</div><select id="fEs"></select></div>
   <div class="fgroup"><div class="flabel">Tipo de corriente</div><select id="fTc"></select></div>
+  <div class="fgroup"><div class="flabel">Titularidad del recinto</div>
+    <select id="fPv">
+      <option value="">Públicos y privados</option>
+      <option value="0">Solo no privados</option>
+      <option value="1">Solo institución privada</option>
+    </select></div>
   <div class="fgroup">
-    <div class="flabel">Potencia</div>
-    <label class="chk"><input type="checkbox" class="fkw" value="0" checked><span class="dot" style="background:var(--disp)"></span>Lento · &lt;22 kW<span class="cnt" id="nkw0"></span></label>
-    <label class="chk"><input type="checkbox" class="fkw" value="1" checked><span class="dot" style="background:var(--nd)"></span>Semirrápido · 22–49<span class="cnt" id="nkw1"></span></label>
-    <label class="chk"><input type="checkbox" class="fkw" value="2" checked><span class="dot" style="background:var(--ocup)"></span>Rápido · 50–149<span class="cnt" id="nkw2"></span></label>
-    <label class="chk"><input type="checkbox" class="fkw" value="3" checked><span class="dot" style="background:var(--cms)"></span>Ultrarrápido · ≥150<span class="cnt" id="nkw3"></span></label>
+    <div class="flabel">Velocidad de carga</div>
+    <label class="chk"><input type="checkbox" class="fkw" value="0" checked>
+      <svg width="13" height="13" viewBox="0 0 12 12"><polygon points="6,1 11,10.5 1,10.5" fill="#b48ead"/></svg>
+      Lento · &lt;50 kW<span class="cnt" id="nkw0"></span></label>
+    <label class="chk"><input type="checkbox" class="fkw" value="1" checked>
+      <svg width="13" height="13" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="#8fd3c7"/></svg>
+      Rápido · 50–149 kW<span class="cnt" id="nkw1"></span></label>
+    <label class="chk"><input type="checkbox" class="fkw" value="2" checked>
+      <svg width="13" height="13" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5.4" fill="#e8c547"/></svg>
+      Ultrarrápido · ≥150 kW<span class="cnt" id="nkw2"></span></label>
   </div>
   <div class="fgroup"><div class="flabel">Buscar</div>
     <input type="search" id="q" placeholder="Nombre de sitio o comuna"></div>
@@ -227,6 +266,7 @@ tbody tr:hover{background:var(--panel2)}
     <div class="stat"><div class="n" id="sSit">0</div><div class="l">Sitios</div></div>
     <div class="stat hl"><div class="n" id="sFU">0%</div><div class="l">Factor de utilización</div></div>
     <div class="stat"><div class="n" id="sHrs">0</div><div class="l">Horas-conector cargando</div></div>
+    <div class="stat"><div class="n" id="sFUb">0%</div><div class="l">FU bruto · sobre el tiempo total</div></div>
     <div class="stat warn"><div class="n" id="sFdl">0%</div><div class="l">Tiempo fuera de línea</div></div>
     <div class="stat"><div class="n" id="sUso">0</div><div class="l">Con al menos una carga</div></div>
   </div>
@@ -287,6 +327,10 @@ tbody tr:hover{background:var(--panel2)}
     <div class="card"><h3>Utilización por operador en el tiempo</h3>
       <div class="cap">Los seis operadores con más conectores en la selección.</div>
       <div class="cwrap"><canvas id="cOpT"></canvas></div></div>
+    <div class="card wide"><h3>Utilización por velocidad de carga a lo largo del tiempo</h3>
+      <div class="cap">Lento, rápido y ultrarrápido tienen patrones distintos: las sesiones AC
+        lentas duran horas y arrastran ocupación, las DC rápidas rotan.</div>
+      <div class="cwrap"><canvas id="cKwT"></canvas></div></div>
     <div class="card wide"><h3>Cargas que empiezan y que terminan</h3>
       <div class="cap">Transiciones detectadas entre ciclos consecutivos. Disponible→Ocupado es un inicio de carga;
         Ocupado→Disponible es un término.</div>
@@ -345,6 +389,60 @@ tbody tr:hover{background:var(--panel2)}
       <div class="cap">Haz clic en una fila para centrar el mapa en ese conector. La barra muestra el
         reparto del tiempo: azul cargando, verde disponible, rojo fuera de línea, ámbar no disponible.</div>
       <div class="tw" style="max-height:none"><table id="tCon"></table></div></div>
+  </div>
+</div></section>
+
+<!-- FICHA DE CONECTOR -->
+<section class="pane" id="p-cnx"><div class="scroll">
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+    <input type="search" id="cxBuscar" placeholder="Buscar por sitio, comuna u operador"
+      style="flex:1;min-width:230px;max-width:420px">
+    <select id="cxSel" style="flex:2;min-width:280px"></select>
+    <span id="cxN" style="color:var(--dim2);font-size:11px"></span>
+  </div>
+  <div id="cxVacio" class="warn">
+    Escribe en el buscador o elige un conector de la lista. También puedes hacer clic
+    en cualquier fila de la pestaña <b>Conectores</b> para abrir su ficha.
+  </div>
+  <div id="cxFicha" style="display:none">
+    <div class="card wide" style="margin-bottom:16px">
+      <h3 id="cxTit">—</h3>
+      <div class="cap" id="cxSub"></div>
+      <div style="display:flex;gap:1px;background:var(--line);border-radius:5px;
+        overflow:hidden;flex-wrap:wrap;margin-top:10px">
+        <div class="stat hl"><div class="n" id="cxFu">—</div><div class="l">Factor de utilización</div></div>
+        <div class="stat"><div class="n" id="cxFub">—</div><div class="l">FU bruto</div></div>
+        <div class="stat"><div class="n" id="cxHrs">—</div><div class="l">Horas cargando</div></div>
+        <div class="stat"><div class="n" id="cxIni">—</div><div class="l">Cargas iniciadas</div></div>
+        <div class="stat warn"><div class="n" id="cxFdl">—</div><div class="l">Fuera de línea</div></div>
+        <div class="stat"><div class="n" id="cxCam">—</div><div class="l">Cambios de estado</div></div>
+      </div>
+    </div>
+    <div class="charts">
+      <div class="card wide"><h3>Línea de tiempo</h3>
+        <div class="cap">Cada franja es una captura, coloreada por el estado declarado.
+          Pasa el cursor para ver el instante exacto.</div>
+        <canvas id="cxTL" style="width:100%;height:74px;border-radius:4px;cursor:crosshair"></canvas>
+        <div id="cxTLlbl" style="color:var(--dim2);font-size:11px;margin-top:7px;
+          font-family:'JetBrains Mono',monospace;min-height:16px"></div>
+        <div style="margin-top:9px;font-size:11px;color:var(--dim2)" id="cxLeg"></div>
+      </div>
+      <div class="card"><h3>Perfil por hora del día</h3>
+        <div class="cap">Porcentaje del tiempo en cada estado, según la hora. Con varios días
+          acumulados revela el patrón de uso habitual.</div>
+        <div class="cwrap"><canvas id="cxHora"></canvas></div></div>
+      <div class="card"><h3>Reparto del tiempo</h3>
+        <div class="cap">Minutos en cada estado dentro del rango seleccionado.</div>
+        <div class="cwrap"><canvas id="cxPie"></canvas></div></div>
+      <div class="card wide"><h3>Episodios</h3>
+        <div class="cap">Tramos continuos en un mismo estado. La duración se estima como
+          <code>k × intervalo</code>; el valor real está a ±1 intervalo por el muestreo
+          discreto. Los marcados como <b>borde</b> tocan el inicio o el fin del rango,
+          así que su duración real puede ser mayor.</div>
+        <div class="tw"><table id="cxEp"></table></div></div>
+      <div class="card wide"><h3>Otros conectores del mismo sitio</h3>
+        <div class="tw" style="max-height:280px"><table id="cxSitio"></table></div></div>
+    </div>
   </div>
 </div></section>
 
@@ -439,8 +537,11 @@ tbody tr:hover{background:var(--panel2)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 // Rutas relativas: GitHub Pages sirve la carpeta docs/ como raiz del sitio.
-const DATA_URL = "data/historico.json.gz";
-const LIVE_URL = "data/live.json";
+const META_URL = "data/meta.json.gz";        // metadatos fijos, 1 vez al dia
+const HIST_URL = "data/historico.json.gz";   // dias cerrados, 1 vez al dia
+const HOY_URL  = "data/hoy.json.gz";         // dia en curso, cada 5 min
+const LIVE_URL = "data/live.json";           // instante actual, cada 5 min
+const REFRESCO_MS = 150000;                  // 2,5 min
 
 let D;
 
@@ -482,64 +583,143 @@ function avisoSinHistorico(msg){
 }
 
 async function cargar(){
-  try{
-    D = await traerJSON(DATA_URL);
-    if(!D || !D.conectores || !D.conectores.length)
-      throw new Error('el archivo no trae conectores');
-    return true;
-  }catch(e){
-    avisoSinHistorico('No se pudo leer <code>'+DATA_URL+'</code>: '+e.message);
+  // Tres piezas que se unen: metadatos + dias cerrados + dia en curso.
+  // El historico puede no existir aun (primer dia); el dia en curso si,
+  // porque lo reescribe cada captura. Con cualquiera de los dos hay serie.
+  let META=null, HIST=null, HOY=null;
+  try{ META = await traerJSON(META_URL); }
+  catch(e){ avisoSinHistorico('No se pudo leer <code>meta.json.gz</code>: '+e.message); return false; }
+
+  try{ HIST = await traerJSON(HIST_URL); }catch(e){ HIST=null; }
+  try{ HOY  = await traerJSON(HOY_URL);  }catch(e){ HOY=null;  }
+
+  const ts=[], caps=[];
+  const empujar = p => { if(!p||!p.ts) return;
+    p.ts.forEach((t,i)=>{ ts.push(t); caps.push(p.caps[i]); }); };
+  empujar(HIST); empujar(HOY);
+
+  if(!ts.length){
+    avisoSinHistorico('Todavía no hay capturas acumuladas.');
     return false;
   }
+  // Ordena y elimina duplicados por si historico y dia en curso se solapan
+  const orden = ts.map((t,i)=>i).sort((a,b)=>ts[a]<ts[b]?-1:1);
+  const tsO=[], capsO=[]; let ult=null;
+  orden.forEach(i=>{ if(ts[i]!==ult){ tsO.push(ts[i]); capsO.push(caps[i]); ult=ts[i]; } });
+
+  const N = META.ids.length;
+  const validas = capsO.map((c,i)=>[c,i]).filter(([c])=>c.length===N);
+  const T = validas.length;
+  const tsV = validas.map(([,i])=>tsO[i]);
+
+  // Traspone: de una fila por captura a un string por conector
+  const series = new Array(N);
+  for(let j=0;j<N;j++){
+    const b = new Array(T);
+    for(let k=0;k<T;k++) b[k]=validas[k][0][j];
+    series[j]=b.join('');
+  }
+
+  // Pesos: minutos que representa cada captura (regla del trapecio).
+  // Necesario porque el cron de GitHub Actions no es puntual.
+  const ms = tsV.map(t=>new Date(t.replace(' ','T')+'-04:00').getTime());
+  const w = new Array(T);
+  if(T===1){ w[0]=5; }
+  else{
+    const g=[]; for(let i=1;i<T;i++) g.push((ms[i]-ms[i-1])/60000);
+    w[0]=g[0]/2; w[T-1]=g[T-2]/2;
+    for(let i=1;i<T-1;i++) w[i]=(g[i-1]+g[i])/2;
+  }
+  const gaps=[]; for(let i=1;i<T;i++) gaps.push((ms[i]-ms[i-1])/60000);
+  const med = gaps.length ? gaps.slice().sort((a,b)=>a-b)[Math.floor(gaps.length/2)] : 5;
+
+  const fmt = t => t.slice(8,10)+'-'+t.slice(5,7)+' '+t.slice(11,16);
+  D = {
+    meta:{ inicio:tsV[0].slice(0,16), fin:tsV[T-1].slice(0,16), n_ciclos:T,
+           intervalo_min:Math.round(med*10)/10,
+           horas: Math.round(w.reduce((a,b)=>a+b,0)/60*100)/100,
+           huecos: gaps.filter(x=>x>med*1.8).length,
+           dias: new Set(tsV.map(t=>t.slice(0,10))).size },
+    ts: tsV.map(fmt), tsfull: tsV, w,
+    // Se descartan los conectores marcados como excluidos en los metadatos
+    // (operadores de prueba del registro, que no son infraestructura real).
+    conectores: META.meta.map((m,j)=>Object.assign({}, m, {s:series[j]}))
+                         .filter(o=>o.n!=null && !o.ex)
+  };
+  return true;
 }
-const EST = ['DISPONIBLE','OCUPADO','FUERA DE LINEA','NO DISPONIBLE'];
-const COL = ['#3fb950','#4fb0e8','#ff4d6d','#f2a63b'];
-const CSS = getComputedStyle(document.documentElement);
-const c = n => CSS.getPropertyValue(n).trim();
 
 /* ---------- métricas por conector ---------- */
-function kwBucket(k){ return k<22?0 : k<50?1 : k<150?2 : 3; }
-let W, NC, TOTMIN;
-function calcular(){
-W = D.w; NC = D.meta.n_ciclos; TOTMIN = W.reduce((a,b)=>a+b,0);
-D.conectores.forEach(o=>{
-  const m=[0,0,0,0];
-  for(let i=0;i<NC;i++) m[+o.s[i]] += W[i];
-  o.m = m;                                  // minutos por estado
-  o.tot = m[0]+m[1]+m[2]+m[3];
-  o.inf = m[0]+m[1];                        // tiempo informativo
-  o.fu  = o.inf>0 ? 100*m[1]/o.inf : null;  // factor de utilización
-  o.fub = 100*m[1]/o.tot;                   // FU bruto
-  o.pfdl= 100*m[2]/o.tot;
-  o.pnd = 100*m[3]/o.tot;
-  o.h   = m[1]/60;                          // horas cargando
-  o.kb  = kwBucket(o.kw);
-  let mv=false; for(let i=1;i<NC;i++) if(o.s[i]!==o.s[0]){mv=true;break;}
-  o.mov = mv;
-  o.cls = mv ? 'ACTIVO' : ('SIEMPRE '+EST[+o.s[0]]);
-  o.noop = !mv && (o.s[0]==='2'||o.s[0]==='3');   // inmóvil no operativo
-  // transiciones
-  o.ini=0; o.fin=0;
-  for(let i=1;i<NC;i++){
-    if(o.s[i-1]==='0'&&o.s[i]==='1') o.ini++;
-    if(o.s[i-1]==='1'&&o.s[i]==='0') o.fin++;
-  }
-});
+// Tramos de potencia segun el criterio del observatorio:
+//   lento < 50 kW · rapido 50-149 kW · ultrarrapido >= 150 kW
+function kwBucket(k){ return k<50?0 : k<150?1 : 2; }
+const KWL   = ['Lento · <50 kW','Rápido · 50–149 kW','Ultrarrápido · ≥150 kW'];
+const KWCOR = ['#b48ead','#8fd3c7','#e8c547'];   // paleta aparte de los estados
+const KWFRM = ['triángulo','círculo','círculo grande'];
+let W, NC, TOTMIN, I0=0, I1=0, TSW=[], TSFW=[];
 
+/* Recalcula las metricas de cada conector sobre la ventana [I0,I1].
+   Todo el dashboard trabaja sobre `sw` (la serie recortada) y sobre W (los
+   pesos de esa ventana), nunca sobre la serie completa. Asi el selector de
+   rango cambia de verdad los numeros y no solo lo que se dibuja. */
+function calcular(){
+  const T = D.tsfull.length;
+  I0 = Math.max(0, Math.min(I0, T-1));
+  I1 = Math.max(I0, Math.min(I1, T-1));
+
+  TSW  = D.ts.slice(I0, I1+1);
+  TSFW = D.tsfull.slice(I0, I1+1);
+  NC   = TSW.length;
+
+  // Pesos de la ventana. Los extremos pesan medio intervalo, como en el
+  // resto del pipeline: es la regla del trapecio.
+  const ms = TSFW.map(t=>new Date(t.replace(' ','T')+'-04:00').getTime());
+  W = new Array(NC);
+  if(NC===1){ W[0]=D.meta.intervalo_min||5; }
+  else{
+    const g=[]; for(let i=1;i<NC;i++) g.push((ms[i]-ms[i-1])/60000);
+    W[0]=g[0]/2; W[NC-1]=g[NC-2]/2;
+    for(let i=1;i<NC-1;i++) W[i]=(g[i-1]+g[i])/2;
+  }
+  TOTMIN = W.reduce((a,b)=>a+b,0);
+
+  D.conectores.forEach(o=>{
+    o.sw = o.s.slice(I0, I1+1);
+    const m=[0,0,0,0];
+    for(let i=0;i<NC;i++) m[+o.sw[i]] += W[i];
+    o.m=m; o.tot=m[0]+m[1]+m[2]+m[3]; o.inf=m[0]+m[1];
+    o.fu  = o.inf>0 ? 100*m[1]/o.inf : null;
+    o.fub = o.tot>0 ? 100*m[1]/o.tot : 0;
+    o.pfdl= o.tot>0 ? 100*m[2]/o.tot : 0;
+    o.pnd = o.tot>0 ? 100*m[3]/o.tot : 0;
+    o.h   = m[1]/60;
+    o.kb  = kwBucket(o.kw);
+    let mv=false; for(let i=1;i<NC;i++) if(o.sw[i]!==o.sw[0]){mv=true;break;}
+    o.mov=mv;
+    o.cls = mv ? 'ACTIVO' : ('SIEMPRE '+EST[+o.sw[0]]);
+    o.noop= !mv && (o.sw[0]==='2'||o.sw[0]==='3');
+    o.ini=0; o.fin=0;
+    for(let i=1;i<NC;i++){
+      if(o.sw[i-1]==='0'&&o.sw[i]==='1') o.ini++;
+      if(o.sw[i-1]==='1'&&o.sw[i]==='0') o.fin++;
+    }
+  });
 }
 
 /* ---------- filtros ---------- */
-const F = {uni:'op', reg:'', com:'', op:'', es:'', tc:'', kw:[0,1,2,3], q:''};
+const F = {uni:'op', reg:'', com:'', op:'', es:'', tc:'', kw:[0,1,2], pv:'', q:''};
 function sel(){
   const q=F.q.toLowerCase();
   return D.conectores.filter(o=>{
     if(F.uni==='op'  && o.noop) return false;
-    if(F.uni==='mov' && !o.mov) return false;
+    if(F.uni==='pub' && (o.noop || o.pv===true)) return false;
     if(F.reg && o.rg!==F.reg) return false;
     if(F.com && o.cm!==F.com) return false;
     if(F.op  && o.op!==F.op ) return false;
     if(F.es  && o.es!==F.es ) return false;
     if(F.tc  && o.tc!==F.tc ) return false;
+    if(F.pv==='0' && o.pv===true) return false;
+    if(F.pv==='1' && o.pv!==true) return false;
     if(!F.kw.includes(o.kb)) return false;
     if(q && !(o.n.toLowerCase().includes(q)||o.cm.toLowerCase().includes(q))) return false;
     return true;
@@ -577,25 +757,76 @@ fillSel('fOp', uniq('op'),'Todos los operadores');
 fillSel('fEs', uniq('es'),'Todos los estándares');
 fillSel('fTc', uniq('tc'),'AC y DC');
 
-const UD={op:'Excluye los conectores que estuvieron fuera de línea o no disponibles durante toda la ventana, sin ningún cambio.',
-          mov:'Solo conectores que registraron al menos un cambio de estado.',
-          all:'Incluye todo, también los que nunca reportaron.'};
+const UD={
+  op:'Excluye los conectores que estuvieron FUERA DE LÍNEA o NO DISPONIBLES '+
+     'durante toda la ventana, sin un solo cambio. Sí incluye los que estuvieron '+
+     'siempre disponibles: son capacidad operativa ociosa, con FU cero.',
+  all:'Todo el parque declarado, incluidos los que nunca reportaron.',
+  pub:'Solo conectores en instalaciones NO privadas (institucion_privada = false), '+
+      'y además operativos. Es el subconjunto de acceso realmente abierto: deja '+
+      'fuera flotas, estacionamientos de empresa y recintos de acceso restringido.'};
+// Nota metodologica que conviene tener presente al comparar las dos vistas:
+// el FU NO cambia entre ellas. Los conectores caidos no suman ni al numerador
+// ni al denominador, asi que excluirlos no lo mueve. Lo que si cambia es el
+// conteo de conectores, el % fuera de linea y el FU bruto.
+const UD_NOTA = 'El <b>factor de utilización no cambia</b> entre las dos vistas: los '+
+  'conectores caídos no entran en su denominador. Lo que cambia es el conteo, el '+
+  '% fuera de línea y el <b>FU bruto</b>.';
 
-$('hVentana').textContent = D.meta.inicio.slice(11)+'–'+D.meta.fin.slice(11)+' · '+D.meta.inicio.slice(0,10);
-$('hCiclos').textContent  = D.meta.n_ciclos+' ciclos · cada '+D.meta.intervalo_min+' min · '+D.meta.horas+' h';
+$('hVentana').textContent = D.meta.inicio+' → '+D.meta.fin+
+  (D.meta.dias>1?' · '+D.meta.dias+' días':'');
+$('hCiclos').textContent  = D.meta.n_ciclos+' capturas · cada ~'+D.meta.intervalo_min+
+  ' min · '+D.meta.horas+' h'+(D.meta.huecos?' · '+D.meta.huecos+' huecos':'');
 ['nc1','nc2','nc3','mCiclos'].forEach(i=>{const e=$(i);if(e)e.textContent=NC;});
 $('nc2').textContent = D.conectores.length.toLocaleString('es-CL');
 $('mVentana').innerHTML = `La ventana analizada va del <b>${D.meta.inicio}</b> al <b>${D.meta.fin}</b>, `+
   `con <b>${NC}</b> observaciones de <b>${D.conectores.length.toLocaleString('es-CL')}</b> conectores, `+
   `equivalentes a <b>${D.meta.horas} horas</b> continuas.`;
+// Por defecto se carga TODO el periodo disponible
+I0=0; I1=D.tsfull.length-1;
+$('rDesde').min=$('rHasta').min=aInput(D.tsfull[0]);
+$('rDesde').max=$('rHasta').max=aInput(D.tsfull[D.tsfull.length-1]);
+$('rDesde').value=aInput(D.tsfull[0]);
+$('rHasta').value=aInput(D.tsfull[D.tsfull.length-1]);
+document.querySelector('.chip[data-r=all]').classList.add('on');
+calcular();
+infoRango();
 $('slider').max = NC-1;
 }
 
 /* ---------- mapa ---------- */
+/* Tres fondos conmutables. No se usan teselas de Google: requieren clave de API
+   y sus terminos prohiben consumirlas fuera de su SDK. OSM estandar es el
+   equivalente libre y muestra restaurantes, bencineras, comercio y calles. */
+function fondos(){
+  return {
+    'Oscuro (sin distracciones)': L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      {attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:20}),
+    'Calles y comercios (OSM)': L.tileLayer(
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {attribution:'&copy; OpenStreetMap', maxZoom:19}),
+    'Claro con etiquetas': L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      {attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:20}),
+    'Satélite': L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      {attribution:'&copy; Esri', maxZoom:19}),
+  };
+}
 const map=L.map('map',{zoomControl:true}).setView([-33.45,-70.66],5);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  {attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(map);
+const BASES=fondos();
+BASES['Oscuro (sin distracciones)'].addTo(map);
+L.control.layers(BASES,null,{position:'topright',collapsed:true}).addTo(map);
 const layer=L.layerGroup().addTo(map);
+
+/* El fondo claro necesita marcadores con mas contraste que el oscuro. */
+let fondoClaro=false;
+map.on('baselayerchange', e=>{
+  fondoClaro = /OSM|Claro|Satélite/.test(e.name);
+  document.getElementById('map').classList.toggle('claro', fondoClaro);
+  drawMap(sel());
+});
 let CUR=-1;   // -1 = periodo completo
 
 function fuColor(fu){
@@ -609,22 +840,40 @@ function fuColor(fu){
 function drawMap(list){
   layer.clearLayers();
   const sitios={};
-  list.forEach(o=>{ if(o.la===null)return;
+  list.forEach(o=>{ if(o.la===null||o.la===undefined)return;
     (sitios[o.lid]=sitios[o.lid]||{n:o.n,cm:o.cm,rg:o.rg,op:o.op,la:o.la,lo:o.lo,cs:[]}).cs.push(o); });
+
   Object.values(sitios).forEach(s=>{
     const a=agg(s.cs);
+    // La FORMA la define la velocidad de carga; el COLOR, el estado o el FU.
+    // Asi los dos atributos se leen a la vez sin competir por el mismo canal.
+    const tier=Math.max(...s.cs.map(o=>o.kb));
     let col,txt;
     if(CUR<0){ col=fuColor(a.fu); txt=`FU ${a.fu.toFixed(1)}%`; }
-    else{ const cnt=[0,0,0,0]; s.cs.forEach(o=>cnt[+o.s[CUR]]++);
+    else{ const cnt=[0,0,0,0]; s.cs.forEach(o=>cnt[+o.sw[CUR]]++);
       const mx=cnt.indexOf(Math.max(...cnt)); col=COL[mx];
       txt=EST[mx]+` · ${cnt[1]} cargando de ${s.cs.length}`; }
-    L.circleMarker([s.la,s.lo],{
-      radius:Math.min(4+Math.sqrt(s.cs.length)*2.1,15),
-      color:col,weight:1.4,fillColor:col,fillOpacity:.62
-    }).bindPopup(
+
+    const esc=Math.min(1+Math.sqrt(s.cs.length)*0.16,1.9);
+    const R=[7,8,11][tier]*esc, L=R*2+5;
+    // Transparencia decreciente con el tamano: el ultrarrapido es el mas
+    // grande, asi que va mas translucido para no tapar lo que queda debajo.
+    const op=[0.62,0.55,0.38][tier];
+    const gr=[1.5,1.5,1.8][tier];
+    const forma = tier===0
+      ? `<polygon points="${L/2},2.5 ${L-2.5},${L-3.5} 2.5,${L-3.5}" fill="${col}"
+           fill-opacity="${op}" stroke="${col}" stroke-width="${gr}"
+           stroke-linejoin="round"/>`
+      : `<circle cx="${L/2}" cy="${L/2}" r="${R-1.5}" fill="${col}"
+           fill-opacity="${op}" stroke="${col}" stroke-width="${gr}"/>`;
+
+    // Orden de apilado: el ultrarrapido al fondo, el lento arriba. Sin esto
+    // los circulos grandes tapan a los chicos y desaparecen del mapa.
+    L2marker([s.la,s.lo], L, forma, [2000,1000,0][tier]).bindPopup(
       `<b>${s.n}</b><br><span style="color:#8fa8c2">${s.cm} · ${s.rg}</span><br>`+
       `<span style="color:#8fa8c2">Operador:</span> ${s.op}<br>`+
-      `<span style="color:#8fa8c2">Conectores:</span> ${s.cs.length}<br>`+
+      `<span style="color:#8fa8c2">Conectores:</span> ${s.cs.length} `+
+      `<span class="pill" style="background:${KWCOR[tier]}22;color:${KWCOR[tier]}">${KWL[tier]}</span><br>`+
       `<span style="color:#8fa8c2">Factor de utilización:</span> <b>${a.fu.toFixed(1)}%</b><br>`+
       `<span style="color:#8fa8c2">Horas cargando:</span> ${a.h.toFixed(2)}<br>`+
       `<span style="color:#8fa8c2">Tiempo fuera de línea:</span> ${a.pfdl.toFixed(0)}%<br>`+
@@ -632,17 +881,37 @@ function drawMap(list){
       `<span style="color:#5f7d9c">${txt}</span>`).addTo(layer);
   });
 }
+
+/* Marcador SVG: permite triangulos, que circleMarker no soporta. */
+function L2marker(latlng, lado, svgInterior, z){
+  return L.marker(latlng, {zIndexOffset: z||0, icon: L.divIcon({
+    className:'', iconSize:[lado,lado], iconAnchor:[lado/2,lado/2],
+    html:`<svg width="${lado}" height="${lado}" viewBox="0 0 ${lado} ${lado}">${svgInterior}</svg>`
+  })});
+}
+
 function drawLegend(){
-  $('lg').innerHTML = CUR<0
-    ? `<div style="color:#8fa8c2;margin-bottom:3px">Factor de utilización</div>
+  const forma =
+    `<div style="color:#8fa8c2;margin:7px 0 3px">Forma = velocidad</div>`+
+    `<div><svg width="12" height="12" viewBox="0 0 12 12" style="vertical-align:-2px">`+
+    `<polygon points="6,1 11,10.5 1,10.5" fill="none" stroke="#8fa8c2" stroke-width="1.4"/></svg>`+
+    `&nbsp;Lento · &lt;50 kW</div>`+
+    `<div><svg width="12" height="12" viewBox="0 0 12 12" style="vertical-align:-2px">`+
+    `<circle cx="6" cy="6" r="3.4" fill="none" stroke="#8fa8c2" stroke-width="1.4"/></svg>`+
+    `&nbsp;Rápido · 50–149 kW</div>`+
+    `<div><svg width="12" height="12" viewBox="0 0 12 12" style="vertical-align:-2px">`+
+    `<circle cx="6" cy="6" r="5" fill="none" stroke="#8fa8c2" stroke-width="1.4"/></svg>`+
+    `&nbsp;Ultrarrápido · ≥150 kW</div>`;
+  const color = CUR<0
+    ? `<div style="color:#8fa8c2;margin-bottom:3px">Color = factor de utilización</div>
        <div><span class="dot" style="background:#3fb950"></span>0% · sin uso observado</div>
        <div><span class="dot" style="background:#2d7dad"></span>0–10%</div>
        <div><span class="dot" style="background:#4fb0e8"></span>10–25%</div>
        <div><span class="dot" style="background:#f2a63b"></span>25–50%</div>
-       <div><span class="dot" style="background:#ff4d6d"></span>50% o más</div>
-       <div><span class="dot" style="background:#5f7d9c"></span>sin dato informativo</div>`
-    : `<div style="color:#8fa8c2;margin-bottom:3px">Estado dominante del sitio</div>`+
+       <div><span class="dot" style="background:#ff4d6d"></span>50% o más</div>`
+    : `<div style="color:#8fa8c2;margin-bottom:3px">Color = estado del sitio</div>`+
       EST.map((e,i)=>`<div><span class="dot" style="background:${COL[i]}"></span>${e}</div>`).join('');
+  $('lg').innerHTML = color + forma;
 }
 
 /* ---------- gráficos ---------- */
@@ -657,13 +926,13 @@ const pct={ticks:{callback:v=>v+'%'}};
 
 function serieEstados(list){
   const out=[[],[],[],[]];
-  for(let i=0;i<NC;i++){const cnt=[0,0,0,0];list.forEach(o=>cnt[+o.s[i]]++);
+  for(let i=0;i<NC;i++){const cnt=[0,0,0,0];list.forEach(o=>cnt[+o.sw[i]]++);
     for(let k=0;k<4;k++)out[k].push(cnt[k]);}
   return out;
 }
 function serieFU(list){
   const out=[];
-  for(let i=0;i<NC;i++){let d=0,o1=0;list.forEach(o=>{if(o.s[i]==='0')d++;else if(o.s[i]==='1')o1++;});
+  for(let i=0;i<NC;i++){let d=0,o1=0;list.forEach(o=>{if(o.sw[i]==='0')d++;else if(o.sw[i]==='1')o1++;});
     out.push(d+o1>0?100*o1/(d+o1):null);}
   return out;
 }
@@ -687,11 +956,27 @@ function render(){
   $('sCon').textContent=A.n.toLocaleString('es-CL');
   $('sSit').textContent=A.sitios.toLocaleString('es-CL');
   $('sFU').textContent=A.fu.toFixed(1)+'%';
+  $('sFUb').textContent=(A.tot>0?100*A.mo/A.tot:0).toFixed(1)+'%';
   $('sHrs').textContent=A.h.toFixed(0);
   $('sFdl').textContent=A.pfdl.toFixed(0)+'%';
   $('sUso').textContent=A.conUso.toLocaleString('es-CL');
-  $('uniDesc').textContent=UD[F.uni];
-  [0,1,2,3].forEach(b=>$('nkw'+b).textContent=D.conectores.filter(o=>o.kb===b).length);
+  {const nAll=D.conectores.length, nExc=D.conectores.filter(o=>o.noop).length;
+   {const horas=TOTMIN/60;
+   if(horas<12) $('uniDesc').style.borderLeftColor='var(--nd)';
+   else $('uniDesc').style.borderLeftColor='var(--accent)';}
+  $('uniDesc').innerHTML = UD[F.uni] + '<br><br>' + UD_NOTA +
+   (TOTMIN/60 < 12 ? '<br><br><span style="color:var(--nd)"><b>Ventana corta ('+
+     (TOTMIN/60).toFixed(1)+' h).</b> Mientras más breve el rango, más conectores '+
+     'parecen inmóviles solo porque no alcanzaron a cambiar. Para juzgar si un '+
+     'conector está realmente caído, usa al menos un día.</span>' : '') + '<br><br>'+
+     '<b style="color:var(--txt)">'+
+     (F.uni==='op'?(nAll-nExc):F.uni==='pub'?nPub:nAll).toLocaleString('es-CL')+
+     '</b> de '+nAll.toLocaleString('es-CL')+' conectores'+
+     (F.uni==='op'?' · <span style="color:var(--fdl)">'+nExc.toLocaleString('es-CL')+
+      ' caídos permanentes</span>':'')+
+     (F.uni==='pub'?' · <span style="color:var(--fdl)">'+nExc.toLocaleString('es-CL')+
+      ' caídos + '+nPriv.toLocaleString('es-CL')+' privados</span>':'');}
+  [0,1,2].forEach(b=>$('nkw'+b).textContent=D.conectores.filter(o=>o.kb===b).length);
 
   drawMap(L2); drawLegend();
 
@@ -742,14 +1027,14 @@ function render(){
   /* --- evolución --- */
   const se=serieEstados(L2);
   chart('cSerie',{type:'line',
-    data:{labels:D.ts,datasets:EST.map((e,i)=>({label:e,data:se[i],borderColor:COL[i],
+    data:{labels:TSW,datasets:EST.map((e,i)=>({label:e,data:se[i],borderColor:COL[i],
       backgroundColor:COL[i]+'33',fill:true,tension:.25,pointRadius:0,borderWidth:1.6}))},
     options:{scales:{y:{stacked:true,title:{display:true,text:'conectores'}},
       x:{ticks:{maxTicksLimit:16}}},interaction:{mode:'index',intersect:false},
       plugins:{legend:{position:'bottom'}}}});
 
   chart('cFUt',{type:'line',
-    data:{labels:D.ts,datasets:[{label:'Factor de utilización',data:serieFU(L2),
+    data:{labels:TSW,datasets:[{label:'Factor de utilización',data:serieFU(L2),
       borderColor:'#4fb0e8',backgroundColor:'#4fb0e833',fill:true,tension:.3,
       pointRadius:0,borderWidth:2}]},
     options:{scales:{y:{...pct,beginAtZero:true},x:{ticks:{maxTicksLimit:16}}},
@@ -759,7 +1044,7 @@ function render(){
   const mkMulti=(id,key)=>{
     const top=group(L2,key).sort((a,b)=>b.n-a.n).slice(0,6);
     chart(id,{type:'line',
-      data:{labels:D.ts,datasets:top.map((g,i)=>({label:g.k,
+      data:{labels:TSW,datasets:top.map((g,i)=>({label:g.k,
         data:serieFU(L2.filter(o=>o[key]===g.k)),borderColor:PAL[i],
         tension:.3,pointRadius:0,borderWidth:1.8,spanGaps:true}))},
       options:{scales:{y:{...pct,beginAtZero:true},x:{ticks:{maxTicksLimit:12}}},
@@ -767,12 +1052,19 @@ function render(){
   };
   mkMulti('cRegT','rg'); mkMulti('cOpT','op');
 
+  chart('cKwT',{type:'line',
+    data:{labels:TSW,datasets:[0,1,2].map(b=>({label:KWL[b],
+      data:serieFU(L2.filter(o=>o.kb===b)),borderColor:KWCOR[b],
+      backgroundColor:KWCOR[b]+'22',tension:.3,pointRadius:0,borderWidth:2,spanGaps:true}))},
+    options:{scales:{y:{...pct,beginAtZero:true},x:{ticks:{maxTicksLimit:14}}},
+      plugins:{legend:{position:'bottom'}}}});
+
   const ini=[],fin=[];
   for(let i=0;i<NC;i++){ if(i===0){ini.push(0);fin.push(0);continue;}
-    let a=0,b=0; L2.forEach(o=>{if(o.s[i-1]==='0'&&o.s[i]==='1')a++;
-      if(o.s[i-1]==='1'&&o.s[i]==='0')b++;}); ini.push(a); fin.push(-b);}
+    let a=0,b=0; L2.forEach(o=>{if(o.sw[i-1]==='0'&&o.sw[i]==='1')a++;
+      if(o.sw[i-1]==='1'&&o.sw[i]==='0')b++;}); ini.push(a); fin.push(-b);}
   chart('cFlujo',{type:'bar',
-    data:{labels:D.ts,datasets:[
+    data:{labels:TSW,datasets:[
       {label:'Cargas iniciadas',data:ini,backgroundColor:'#4fb0e8'},
       {label:'Cargas terminadas',data:fin,backgroundColor:'#ff4d6d'}]},
     options:{scales:{y:{title:{display:true,text:'conectores'},
@@ -832,13 +1124,12 @@ function render(){
     options:{indexAxis:'y',scales:{x:pct},plugins:{legend:{display:false},
       tooltip:{callbacks:{label:x=>` FU ${x.raw.toFixed(1)}% · ${ess[x.dataIndex].n} conectores`}}}}});
 
-  const KWL=['Lento <22 kW','Semirrápido 22–49','Rápido 50–149','Ultrarrápido ≥150'];
-  const kws=[0,1,2,3].map(b=>({k:KWL[b],...agg(L2.filter(o=>o.kb===b))}));
+  const kws=[0,1,2].map(b=>({k:KWL[b],...agg(L2.filter(o=>o.kb===b))}));
   chart('cKw',{type:'bar',
-    data:{labels:KWL,datasets:[{data:kws.map(o=>o.fu),
-      backgroundColor:['#3fb950','#f2a63b','#4fb0e8','#F03D85']}]},
+    data:{labels:KWL,datasets:[{data:kws.map(o=>o.fu),backgroundColor:KWCOR}]},
     options:{scales:{y:pct},plugins:{legend:{display:false},
-      tooltip:{callbacks:{label:x=>` FU ${x.raw.toFixed(1)}% · ${kws[x.dataIndex].n} conectores`}}}}});
+      tooltip:{callbacks:{label:x=>` FU ${x.raw.toFixed(1)}% · `+
+        `${kws[x.dataIndex].n} conectores · ${kws[x.dataIndex].h.toFixed(1)} h cargando`}}}}});
 
   const colsOp=[
     {h:'Nombre',k:'k',f:r=>r.k},
@@ -863,6 +1154,8 @@ function render(){
     {h:'Operador',k:'op',f:r=>r.op},
     {h:'Estándar',k:'es',f:r=>r.es},
     {h:'kW',k:'kw',n:1,f:r=>r.kw},
+    {h:'Velocidad',k:'kb',f:r=>`<span class="pill" style="background:${KWCOR[r.kb]}22;`+
+      `color:${KWCOR[r.kb]}">${['Lento','Rápido','Ultra'][r.kb]}</span>`},
     {h:'FU',k:'fu',n:1,f:r=>r.fu===null?'—':r.fu.toFixed(1)+'%'},
     {h:'FU bruto',k:'fub',n:1,f:r=>r.fub.toFixed(1)+'%'},
     {h:'Horas cargando',k:'h',n:1,f:r=>r.h.toFixed(2)},
@@ -875,9 +1168,192 @@ function render(){
       const cc={'ACTIVO':'#4fb0e8','SIEMPRE FUERA DE LINEA':'#ff4d6d',
         'SIEMPRE NO DISPONIBLE':'#f2a63b','SIEMPRE DISPONIBLE':'#3fb950','SIEMPRE OCUPADO':'#F03D85'}[r.cls];
       return `<span class="pill" style="background:${cc}22;color:${cc}">${r.cls}</span>`;}}
-  ],rows,r=>{ if(r.la!==null){ document.querySelector('nav button[data-t=mapa]').click();
-      map.setView([r.la,r.lo],15); } });
+  ],rows,r=>{ document.querySelector('nav button[data-t=cnx]').click(); abrirFicha(r.id); });
+
+  poblarSelector();
+  if(CX) abrirFicha(CX);
 }
+
+/* ---------- ficha de conector ---------- */
+let CX=null;
+
+function episodios(o){
+  // Tramos continuos en un mismo estado. Los que tocan un borde del rango se
+  // marcan: su duracion real puede ser mayor que la observada.
+  const ep=[]; let i=0;
+  while(i<NC){
+    let j=i; while(j+1<NC && o.sw[j+1]===o.sw[i]) j++;
+    let min=0; for(let k=i;k<=j;k++) min+=W[k];
+    ep.push({e:+o.sw[i], i, j, n:j-i+1, min,
+             t0:TSFW[i], t1:TSFW[j], borde:(i===0||j===NC-1)});
+    i=j+1;
+  }
+  return ep;
+}
+
+function pintarTimeline(o){
+  const cv=$('cxTL'), ctx=cv.getContext('2d');
+  const anc=cv.clientWidth||900, alt=64, dpr=window.devicePixelRatio||1;
+  cv.width=anc*dpr; cv.height=alt*dpr; cv.style.height=alt+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,anc,alt);
+  // Una columna por captura, ancho proporcional al tiempo que representa
+  let x=0;
+  for(let i=0;i<NC;i++){
+    const w=Math.max(anc*W[i]/TOTMIN, 0.6);
+    ctx.fillStyle=COL[+o.sw[i]];
+    ctx.fillRect(x,0,Math.ceil(w+0.5),alt);
+    x+=w;
+  }
+  cv.onmousemove=ev=>{
+    const r=cv.getBoundingClientRect();
+    const frac=(ev.clientX-r.left)/r.width;
+    let acc=0, idx=0;
+    for(let i=0;i<NC;i++){ acc+=W[i]/TOTMIN; if(frac<=acc){idx=i;break;} idx=i; }
+    $('cxTLlbl').innerHTML=`${TSFW[idx]} · <b style="color:${COL[+o.sw[idx]]}">`+
+      `${EST[+o.sw[idx]]}</b>`;
+  };
+  cv.onmouseleave=()=>{$('cxTLlbl').textContent='';};
+  $('cxLeg').innerHTML=EST.map((e,i)=>
+    `<span style="margin-right:14px"><span class="dot" style="background:${COL[i]}"></span>${e}</span>`).join('');
+}
+
+function abrirFicha(id){
+  const o=D.conectores.find(x=>x.id===id);
+  if(!o){ return; }
+  CX=id;
+  $('cxVacio').style.display='none';
+  $('cxFicha').style.display='';
+  if($('cxSel').value!=String(id)) $('cxSel').value=String(id);
+
+  $('cxTit').textContent=o.n;
+  $('cxSub').innerHTML=`${o.cm} · ${o.rg} &nbsp;|&nbsp; ${o.dir||''}<br>`+
+    `Operador <b style="color:var(--txt)">${o.op}</b> &nbsp;·&nbsp; ${o.es} ${o.tc} `+
+    `<span class="pill" style="background:${KWCOR[o.kb]}22;color:${KWCOR[o.kb]}">`+
+    `${o.kw} kW · ${KWL[o.kb]}</span>`+
+    `&nbsp;·&nbsp; connector_id <code>${o.id}</code>`+
+    (o.irve?` · folio IRVE <code>${o.irve}</code>`:'')+
+    (o.pr?` · ${o.pr} $/kWh`:'')+
+    (o.dx?` · distribuidora ${o.dx}`:'');
+
+  $('cxFu').textContent = o.fu===null?'—':o.fu.toFixed(1)+'%';
+  $('cxFub').textContent= o.fub.toFixed(1)+'%';
+  $('cxHrs').textContent= o.h.toFixed(2);
+  $('cxIni').textContent= o.ini;
+  $('cxFdl').textContent= o.pfdl.toFixed(0)+'%';
+  const ep=episodios(o);
+  $('cxCam').textContent= ep.length-1;
+
+  pintarTimeline(o);
+
+  chart('cxPie',{type:'doughnut',
+    data:{labels:EST,datasets:[{data:o.m,backgroundColor:COL,
+      borderColor:c('--panel'),borderWidth:2}]},
+    options:{cutout:'58%',plugins:{legend:{position:'right'},tooltip:{callbacks:{
+      label:x=>` ${x.label}: ${(x.raw/60).toFixed(2)} h (${(100*x.raw/o.tot).toFixed(1)}%)`}}}}});
+
+  // Perfil por hora
+  const acu=Array.from({length:24},()=>[0,0,0,0]);
+  for(let i=0;i<NC;i++) acu[+TSFW[i].slice(11,13)][+o.sw[i]]+=W[i];
+  const tot=acu.map(a=>a[0]+a[1]+a[2]+a[3]);
+  chart('cxHora',{type:'bar',
+    data:{labels:Array.from({length:24},(_,i)=>i+'h'),
+      datasets:EST.map((e,k)=>({label:e,
+        data:acu.map((a,i)=>tot[i]?100*a[k]/tot[i]:null),backgroundColor:COL[k]}))},
+    options:{scales:{x:{stacked:true},y:{stacked:true,...pct,max:100}},
+      plugins:{legend:{position:'bottom'}}}});
+
+  tbl('cxEp',[
+    {h:'Desde',k:'t0',f:r=>r.t0},
+    {h:'Hasta',k:'t1',f:r=>r.t1},
+    {h:'Estado',k:'e',f:r=>`<span class="pill" style="background:${COL[r.e]}22;`+
+      `color:${COL[r.e]}">${EST[r.e]}</span>`},
+    {h:'Capturas',k:'n',n:1,f:r=>r.n},
+    {h:'Duración',k:'min',n:1,f:r=>r.min<90?r.min.toFixed(0)+' min':(r.min/60).toFixed(1)+' h'},
+    {h:'',k:'borde',f:r=>r.borde?'<span class="pill" style="background:#f2a63b22;color:#f2a63b">borde</span>':''}
+  ], ep.slice().reverse());
+
+  const herm=D.conectores.filter(x=>x.lid===o.lid);
+  tbl('cxSitio',[
+    {h:'ID',k:'id',n:1,f:r=>r.id===o.id?`<b style="color:var(--accent)">${r.id}</b>`:r.id},
+    {h:'Estándar',k:'es',f:r=>r.es},
+    {h:'kW',k:'kw',n:1,f:r=>r.kw},
+    {h:'Velocidad',k:'kb',f:r=>`<span class="pill" style="background:${KWCOR[r.kb]}22;`+
+      `color:${KWCOR[r.kb]}">${['Lento','Rápido','Ultra'][r.kb]}</span>`},
+    {h:'FU',k:'fu',n:1,f:r=>r.fu===null?'—':r.fu.toFixed(1)+'%'},
+    {h:'Horas cargando',k:'h',n:1,f:r=>r.h.toFixed(2)},
+    {h:'Cargas',k:'ini',n:1,f:r=>r.ini},
+    {h:'% fuera de línea',k:'pfdl',n:1,f:r=>r.pfdl.toFixed(0)+'%'}
+  ], herm.slice(), r=>abrirFicha(r.id));
+}
+
+function poblarSelector(){
+  const q=($('cxBuscar').value||'').toLowerCase();
+  const lista=D.conectores.filter(o=>!q ||
+    (o.n+' '+o.cm+' '+o.op+' '+o.id).toLowerCase().includes(q))
+    .sort((a,b)=>b.h-a.h).slice(0,400);
+  $('cxN').textContent=`${lista.length} de ${D.conectores.length}`+
+    (lista.length===400?' (mostrando 400)':'');
+  $('cxSel').innerHTML='<option value="">— elige un conector —</option>'+
+    lista.map(o=>`<option value="${o.id}">${o.id} · ${o.n} · ${o.cm} · `+
+      `${o.kw}kW · FU ${o.fu===null?'—':o.fu.toFixed(0)+'%'}</option>`).join('');
+  if(CX && lista.some(o=>o.id===CX)) $('cxSel').value=String(CX);
+}
+let cxT; $('cxBuscar').oninput=()=>{clearTimeout(cxT);cxT=setTimeout(poblarSelector,220);};
+$('cxSel').onchange=e=>{ if(e.target.value) abrirFicha(+e.target.value); };
+
+/* ---------- rango temporal ---------- */
+// Los timestamps vienen como "AAAA-MM-DD HH:MM:SS" en hora de Chile. Se
+// manipulan como texto para no arrastrar corrimientos de zona horaria.
+const aInput = t => t.slice(0,10)+'T'+t.slice(11,16);
+const desdeInput = v => v.replace('T',' ')+':00';
+
+function indicePara(valor, porDefecto){
+  const T=D.tsfull;
+  for(let i=0;i<T.length;i++) if(T[i]>=valor) return i;
+  return porDefecto;
+}
+function aplicarRango(){
+  const T=D.tsfull;
+  const a=desdeInput($('rDesde').value||aInput(T[0]));
+  const b=desdeInput($('rHasta').value||aInput(T[T.length-1]));
+  I0=indicePara(a,0);
+  I1=T.length-1; for(let i=T.length-1;i>=0;i--) if(T[i]<=b){I1=i;break;}
+  if(I1<I0) I1=I0;
+  calcular();
+  $('slider').max=NC-1;
+  if(CUR>NC-1){CUR=-1;$('slider').value=-1;}
+  infoRango();
+  render();
+}
+function infoRango(){
+  const h=(TOTMIN/60);
+  $('rInfo').innerHTML = `<b style="color:var(--txt)">${NC.toLocaleString('es-CL')}</b> capturas · `+
+    `<b style="color:var(--txt)">${h<48?h.toFixed(1)+' h':(h/24).toFixed(1)+' días'}</b><br>`+
+    `${TSFW[0]} → ${TSFW[TSFW.length-1]}`;
+}
+function fijarRango(horas){
+  const T=D.tsfull;
+  $('rHasta').value = aInput(T[T.length-1]);
+  if(horas==='all'){ $('rDesde').value = aInput(T[0]); }
+  else{
+    const fin=new Date(T[T.length-1].replace(' ','T')+'-04:00');
+    const ini=new Date(fin.getTime()-horas*3600000);
+    const p=n=>String(n).padStart(2,'0');
+    $('rDesde').value = `${ini.getFullYear()}-${p(ini.getMonth()+1)}-${p(ini.getDate())}`+
+                        `T${p(ini.getHours())}:${p(ini.getMinutes())}`;
+  }
+  aplicarRango();
+}
+document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  fijarRango(b.dataset.r==='all'?'all':+b.dataset.r);
+});
+['rDesde','rHasta'].forEach(id=>$(id).onchange=()=>{
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+  aplicarRango();
+});
 
 /* ---------- eventos ---------- */
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
@@ -886,6 +1362,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   b.classList.add('on'); $('p-'+b.dataset.t).classList.add('on');
   if(b.dataset.t==='mapa') setTimeout(()=>map.invalidateSize(),60);
   if(b.dataset.t==='live' && lmap) setTimeout(()=>lmap.invalidateSize(),60);
+  if(b.dataset.t==='cnx' && CX) setTimeout(()=>abrirFicha(CX),60);
 });
 $('fUni').onchange=e=>{F.uni=e.target.value;render();};
 $('fReg').onchange=e=>{F.reg=e.target.value;render();};
@@ -893,21 +1370,24 @@ $('fCom').onchange=e=>{F.com=e.target.value;render();};
 $('fOp').onchange =e=>{F.op =e.target.value;render();};
 $('fEs').onchange =e=>{F.es =e.target.value;render();};
 $('fTc').onchange =e=>{F.tc =e.target.value;render();};
+$('fPv').onchange =e=>{F.pv =e.target.value;render();};
 document.querySelectorAll('.fkw').forEach(k=>k.onchange=()=>{
   F.kw=[...document.querySelectorAll('.fkw:checked')].map(x=>+x.value);render();});
 let qt; $('q').oninput=e=>{clearTimeout(qt);qt=setTimeout(()=>{F.q=e.target.value;render();},220);};
 $('reset').onclick=()=>{
-  F.uni='op';F.reg=F.com=F.op=F.es=F.tc=F.q='';F.kw=[0,1,2,3];
-  ['fUni','fReg','fCom','fOp','fEs','fTc','q'].forEach(i=>$(i).value=i==='fUni'?'op':'');
+  F.uni='op';F.reg=F.com=F.op=F.es=F.tc=F.pv=F.q='';F.kw=[0,1,2];
+  ['fUni','fReg','fCom','fOp','fEs','fTc','fPv','q'].forEach(i=>$(i).value=i==='fUni'?'op':'');
   document.querySelectorAll('.fkw').forEach(k=>k.checked=true);
-  CUR=-1;$('slider').value=-1;render();};
+  CUR=-1;$('slider').value=-1;fijarRango('all');
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+  document.querySelector('.chip[data-r=all]').classList.add('on');};
 $('zoom').onclick=()=>{
   const pts=sel().filter(o=>o.la!==null).map(o=>[o.la,o.lo]);
   if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[35,35]});};
 
 $('slider').oninput=e=>{
   CUR=+e.target.value;
-  $('tLbl').textContent = CUR<0?'Periodo completo':D.ts[CUR];
+  $('tLbl').textContent = CUR<0?'Periodo completo':TSW[CUR];
   $('tMode').textContent = CUR<0?'Color = factor de utilización del período'
                                 :'Color = estado dominante del sitio en ese instante';
   drawMap(sel()); drawLegend();
@@ -950,15 +1430,22 @@ function pintarLive(){
 
   if(!lmap){
     lmap=L.map('liveMap').setView([-33.45,-70.66],5);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      {attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(lmap);
+    const lb=fondos();
+    lb['Oscuro (sin distracciones)'].addTo(lmap);
+    L.control.layers(lb,null,{position:'topright',collapsed:true}).addTo(lmap);
     llayer=L.layerGroup().addTo(lmap);
   }
   llayer.clearLayers();
   (LV.mapa||[]).forEach(s=>{
     const col = s.o>0 ? '#4fb0e8' : (s.d>0 ? '#3fb950' : '#ff4d6d');
-    L.circleMarker([s.la,s.lo],{radius:s.o>0?5+Math.min(s.o,6):3.5,color:col,
-      weight:1.3,fillColor:col,fillOpacity:s.o>0?.85:.35})
+    const tier = s.kb===undefined ? 1 : s.kb;
+    const R=[7,8,11][tier]*(s.o>0?1.25:1), L=R*2+5, op=[0.62,0.55,0.38][tier];
+    const forma = tier===0
+      ? `<polygon points="${L/2},2.5 ${L-2.5},${L-3.5} 2.5,${L-3.5}" fill="${col}"
+           fill-opacity="${op}" stroke="${col}" stroke-width="1.5" stroke-linejoin="round"/>`
+      : `<circle cx="${L/2}" cy="${L/2}" r="${R-1.5}" fill="${col}"
+           fill-opacity="${op}" stroke="${col}" stroke-width="1.5"/>`;
+    L2marker([s.la,s.lo], L, forma, [2000,1000,0][tier])
      .bindPopup(`<b>${s.n}</b><br><span style="color:#8fa8c2">${s.cm} · ${s.op}</span><br>`+
        `Cargando: <b>${s.o}</b> de ${s.t}<br>Disponibles: ${s.d}`).addTo(llayer);
   });
@@ -985,8 +1472,29 @@ function pintarLive(){
     {h:'Cargando',k:'ocup',n:1,f:r=>r.ocup},
     {h:'Conectores',k:'tot',n:1,f:r=>r.tot}],(LV.cargando||[]).slice());
 }
-$('lRefresh').onclick=cargarLive;
-setInterval(cargarLive, 120000);   // refresca cada 2 minutos
+$('lRefresh').onclick=()=>{cargarLive(); refrescarHistorico();};
+setInterval(cargarLive, REFRESCO_MS);
+
+/* Recarga el dia en curso y vuelve a pintar, conservando los filtros y la
+   pestana activa. Es lo que permite dejar el dashboard abierto y ver la
+   evolucion sin tocar nada. */
+let refrescando=false;
+async function refrescarHistorico(){
+  if(refrescando) return; refrescando=true;
+  try{
+    const ok=await cargar();
+    if(ok){
+      // Si el rango llegaba hasta el final, se estira para incluir lo nuevo.
+      const alFinal = I1 >= D.tsfull.length-2;
+      $('rDesde').min=$('rHasta').min=aInput(D.tsfull[0]);
+      $('rDesde').max=$('rHasta').max=aInput(D.tsfull[D.tsfull.length-1]);
+      if(alFinal) $('rHasta').value=aInput(D.tsfull[D.tsfull.length-1]);
+      aplicarRango();
+    }
+  }catch(e){ /* si falla se conserva lo que ya estaba en pantalla */ }
+  refrescando=false;
+}
+setInterval(refrescarHistorico, REFRESCO_MS);
 
 // arranque
 cargarLive();

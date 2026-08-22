@@ -1,3 +1,7 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# Salidas del exportador: se regeneran cuando se necesiten y pueden pesar
+# cientos de MB. No tiene sentido versionarlas.
+export/
