@@ -641,13 +641,25 @@ async function cargar(){
            huecos: gaps.filter(x=>x>med*1.8).length,
            dias: new Set(tsV.map(t=>t.slice(0,10))).size },
     ts: tsV.map(fmt), tsfull: tsV, w,
-    // Se descartan los conectores marcados como excluidos en los metadatos
-    // (operadores de prueba del registro, que no son infraestructura real).
+    // Se descartan los operadores de prueba del registro, que no son
+    // infraestructura real. El filtro va aqui ademas de en captura.py para que
+    // surta efecto sin esperar a que se regeneren los metadatos.
     conectores: META.meta.map((m,j)=>Object.assign({}, m, {s:series[j]}))
-                         .filter(o=>o.n!=null && !o.ex)
+                         .filter(o=>o.n!=null && !o.ex && !esPrueba(o.op))
   };
   return true;
 }
+
+/* ---------- constantes base ---------- */
+// Coincidencia por subcadena: en el registro el operador de prueba aparece
+// como "nmaes99 prueba prod patre99 matre99" y el nombre va cambiando.
+const OPC_PRUEBA = ['nmaes99','patre99','matre99','prueba prod'];
+const esPrueba = n => { const s=String(n||'').toLowerCase();
+  return OPC_PRUEBA.some(p=>s.includes(p)); };
+const EST = ['DISPONIBLE','OCUPADO','FUERA DE LINEA','NO DISPONIBLE'];
+const COL = ['#3fb950','#4fb0e8','#ff4d6d','#f2a63b'];
+const CSS = getComputedStyle(document.documentElement);
+const c = n => CSS.getPropertyValue(n).trim();
 
 /* ---------- métricas por conector ---------- */
 // Tramos de potencia segun el criterio del observatorio:
@@ -741,6 +753,21 @@ function group(list,key){
   return Object.entries(g).map(([k,v])=>({k, ...agg(v)}));
 }
 
+const UD={
+  op:'Excluye los conectores que estuvieron FUERA DE LÍNEA o NO DISPONIBLES '+
+     'durante toda la ventana, sin un solo cambio. Sí incluye los que estuvieron '+
+     'siempre disponibles: son capacidad operativa ociosa, con FU cero.',
+  all:'Todo el parque declarado, incluidos los que nunca reportaron.',
+  pub:'Solo conectores en instalaciones NO privadas (institucion_privada = false), '+
+      'y además operativos. Es el subconjunto de acceso realmente abierto: deja '+
+      'fuera flotas, estacionamientos de empresa y recintos de acceso restringido.'};
+// El FU NO cambia entre A y B: los conectores caidos no suman ni al numerador
+// ni al denominador. Lo que cambia es el conteo, el % fuera de linea y el FU bruto.
+const UD_NOTA = 'El <b>factor de utilización no cambia</b> entre A y B: los '+
+  'conectores caídos no entran en su denominador. Lo que cambia es el conteo, el '+
+  '% fuera de línea y el <b>FU bruto</b>. La vista C sí lo cambia, porque altera '+
+  'la composición de la muestra.';
+
 /* ---------- UI ---------- */
 const $=id=>document.getElementById(id);
 function fillSel(id,vals,label){
@@ -782,15 +809,17 @@ $('nc2').textContent = D.conectores.length.toLocaleString('es-CL');
 $('mVentana').innerHTML = `La ventana analizada va del <b>${D.meta.inicio}</b> al <b>${D.meta.fin}</b>, `+
   `con <b>${NC}</b> observaciones de <b>${D.conectores.length.toLocaleString('es-CL')}</b> conectores, `+
   `equivalentes a <b>${D.meta.horas} horas</b> continuas.`;
-// Por defecto se carga TODO el periodo disponible
-I0=0; I1=D.tsfull.length-1;
-$('rDesde').min=$('rHasta').min=aInput(D.tsfull[0]);
-$('rDesde').max=$('rHasta').max=aInput(D.tsfull[D.tsfull.length-1]);
-$('rDesde').value=aInput(D.tsfull[0]);
-$('rHasta').value=aInput(D.tsfull[D.tsfull.length-1]);
-document.querySelector('.chip[data-r=all]').classList.add('on');
-calcular();
-infoRango();
+// Por defecto: las ultimas 24 h terminando en la captura mas reciente, para
+// que al abrir se vea el estado actual. Con el boton "Todo" se ve el periodo
+// completo. Si aun no hay 24 h de datos, se muestra todo lo que haya.
+const T0=D.tsfull;
+$('rDesde').min=$('rHasta').min=aInput(T0[0]);
+$('rDesde').max=$('rHasta').max=aInput(T0[T0.length-1]);
+const horasTotales=(new Date(T0[T0.length-1].replace(' ','T')+'-04:00')
+                   -new Date(T0[0].replace(' ','T')+'-04:00'))/3600000;
+const porDefecto = horasTotales>24 ? '24' : 'all';
+document.querySelector(`.chip[data-r="${porDefecto}"]`).classList.add('on');
+fijarRango(porDefecto==='all'?'all':24);
 $('slider').max = NC-1;
 }
 
@@ -1315,8 +1344,10 @@ function indicePara(valor, porDefecto){
 }
 function aplicarRango(){
   const T=D.tsfull;
-  const a=desdeInput($('rDesde').value||aInput(T[0]));
-  const b=desdeInput($('rHasta').value||aInput(T[T.length-1]));
+  // Los inputs no llevan segundos. Para "hasta" se completa con :59, si no la
+  // captura de las 10:00:59 quedaria fuera de un rango que termina a las 10:00.
+  const a=($('rDesde').value||aInput(T[0])).replace('T',' ')+':00';
+  const b=($('rHasta').value||aInput(T[T.length-1])).replace('T',' ')+':59';
   I0=indicePara(a,0);
   I1=T.length-1; for(let i=T.length-1;i>=0;i--) if(T[i]<=b){I1=i;break;}
   if(I1<I0) I1=I0;
