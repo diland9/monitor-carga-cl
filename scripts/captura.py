@@ -143,11 +143,15 @@ CAMPOS_META = {
 # infraestructura real. Se marcan como excluidos en los metadatos en vez de
 # borrarse de la serie: asi el largo del string de estados no cambia y las
 # capturas ya tomadas siguen siendo validas.
-OPC_EXCLUIDOS = {"nmaes99"}
+#
+# La coincidencia es por SUBCADENA, no exacta: en el registro el nombre real
+# aparece como "nmaes99 prueba prod patre99 matre99" y va cambiando.
+OPC_EXCLUIDOS = ("nmaes99", "patre99", "matre99", "prueba prod")
 
 
 def es_excluido(nombre):
-    return str(nombre).strip().lower() in OPC_EXCLUIDOS
+    n = str(nombre).strip().lower()
+    return any(p in n for p in OPC_EXCLUIDOS)
 
 
 def escribir_meta(df, ids, destino):

@@ -42,7 +42,7 @@ EST = ["DISPONIBLE", "OCUPADO", "FUERA DE LINEA", "NO DISPONIBLE"]
 
 # Operadores de prueba del registro, sin infraestructura real detras.
 # Debe coincidir con OPC_EXCLUIDOS en captura.py.
-OPC_EXCLUIDOS = {"nmaes99"}
+OPC_EXCLUIDOS = ("nmaes99", "patre99", "matre99", "prueba prod")
 
 
 def cargar_serie(desde=None, hasta=None):
@@ -127,7 +127,7 @@ def main():
         for cid in ids:
             if cid in meta.index:
                 o = str(meta.loc[cid].get("opc", "")).strip().lower()
-                if o in OPC_EXCLUIDOS:
+                if any(p in o for p in OPC_EXCLUIDOS):
                     excluidos.add(cid)
         if excluidos:
             print(f"  {len(excluidos)} conectores excluidos (operador de prueba)")
