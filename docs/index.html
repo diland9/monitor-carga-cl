@@ -157,12 +157,12 @@ tbody tr:hover{background:var(--panel2)}
 <nav>
   <button class="on" data-t="live">En vivo</button>
   <button data-t="mapa">Mapa</button>
-  <button data-t="parque">Estado del parque</button>
+  <button data-t="parque">Estado de la red</button>
   <button data-t="evo">Evolución temporal</button>
   <button data-t="terr">Comunas y regiones</button>
   <button data-t="oper">Operadores</button>
   <button data-t="conn">Conectores</button>
-  <button data-t="cnx">Ficha de conector</button>
+  <button data-t="cnx">Zoom conector</button>
   <button data-t="metodo">Metodología</button>
 </nav>
 
@@ -179,6 +179,7 @@ tbody tr:hover{background:var(--panel2)}
       <button class="chip" data-r="24">24 h</button>
       <button class="chip" data-r="72">3 días</button>
       <button class="chip" data-r="168">7 días</button>
+      <button class="chip" data-r="720">30 días</button>
     </div>
     <div id="rInfo" style="color:var(--dim2);font-size:11px;margin-top:8px;line-height:1.5"></div>
   </div>
@@ -226,12 +227,16 @@ tbody tr:hover{background:var(--panel2)}
 <!-- EN VIVO -->
 <section class="pane on" id="p-live">
   <div class="stats">
-    <div class="stat"><div class="n" id="lTot">—</div><div class="l">Conectores</div></div>
-    <div class="stat" style="--c:var(--ocup)"><div class="n" id="lOcu" style="color:var(--ocup)">—</div><div class="l">Cargando ahora</div></div>
-    <div class="stat"><div class="n" id="lDis" style="color:var(--disp)">—</div><div class="l">Disponibles</div></div>
-    <div class="stat warn"><div class="n" id="lFdl">—</div><div class="l">Fuera de línea</div></div>
-    <div class="stat"><div class="n" id="lNd" style="color:var(--nd)">—</div><div class="l">No disponibles</div></div>
-    <div class="stat hl"><div class="n" id="lFu">—</div><div class="l">Factor de utilización</div></div>
+    <div class="stat"><div class="n" id="lTot">—</div><div class="l">Conectores declarados</div></div>
+    <div class="stat"><div class="n" id="lOcu" style="color:var(--ocup)">—</div>
+      <div class="l">Cargando ahora <b id="lOcuP" style="color:var(--ocup)"></b></div></div>
+    <div class="stat"><div class="n" id="lDis" style="color:var(--disp)">—</div>
+      <div class="l">Disponibles <b id="lDisP" style="color:var(--disp)"></b></div></div>
+    <div class="stat warn"><div class="n" id="lFdl">—</div>
+      <div class="l">Fuera de línea <b id="lFdlP" style="color:var(--fdl)"></b></div></div>
+    <div class="stat"><div class="n" id="lNd" style="color:var(--nd)">—</div>
+      <div class="l">No disponibles <b id="lNdP" style="color:var(--nd)"></b></div></div>
+    <div class="stat hl"><div class="n" id="lFu">—</div><div class="l">Ocupados / reportando</div></div>
   </div>
   <div class="scroll">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;color:var(--dim2);font-size:12px">
@@ -242,9 +247,11 @@ tbody tr:hover{background:var(--panel2)}
       <button class="act" style="width:auto;padding:5px 12px;margin-left:auto" id="lRefresh">Actualizar</button>
     </div>
     <div class="charts">
-      <div class="card"><h3>Dónde se está cargando ahora</h3>
+      <div class="card wide" id="cardLiveMap"><h3>Dónde se está cargando ahora
+        <button class="act" id="lExp" style="width:auto;float:right;padding:4px 12px;
+          margin-top:-3px">Ampliar</button></h3>
         <div class="cap">Sitios con al menos un conector ocupado en este instante.</div>
-        <div id="liveMap" style="height:400px;border-radius:5px"></div></div>
+        <div id="liveMap" style="height:420px;border-radius:5px"></div></div>
       <div class="card"><h3>Estado de la red</h3>
         <div class="cap">Reparto instantáneo de los conectores declarados.</div>
         <div class="cwrap"><canvas id="lPie"></canvas></div></div>
@@ -262,13 +269,15 @@ tbody tr:hover{background:var(--panel2)}
 <!-- MAPA -->
 <section class="pane" id="p-mapa">
   <div class="stats">
-    <div class="stat"><div class="n" id="sCon">0</div><div class="l">Conectores</div></div>
+    <div class="stat"><div class="n" id="sCon">0</div>
+      <div class="l">Conectores <b id="sConP" style="color:var(--dim)"></b></div></div>
     <div class="stat"><div class="n" id="sSit">0</div><div class="l">Sitios</div></div>
     <div class="stat hl"><div class="n" id="sFU">0%</div><div class="l">Factor de utilización</div></div>
     <div class="stat"><div class="n" id="sHrs">0</div><div class="l">Horas-conector cargando</div></div>
     <div class="stat"><div class="n" id="sFUb">0%</div><div class="l">FU bruto · sobre el tiempo total</div></div>
     <div class="stat warn"><div class="n" id="sFdl">0%</div><div class="l">Tiempo fuera de línea</div></div>
-    <div class="stat"><div class="n" id="sUso">0</div><div class="l">Con al menos una carga</div></div>
+    <div class="stat"><div class="n" id="sUso">0</div>
+      <div class="l">Con al menos una carga <b id="sUsoP" style="color:var(--dim)"></b></div></div>
   </div>
   <div id="map"></div>
   <div class="legend" id="lg"></div>
@@ -290,9 +299,11 @@ tbody tr:hover{background:var(--panel2)}
     se separan abajo.
   </div>
   <div class="charts">
-    <div class="card"><h3>Composición del parque</h3>
-      <div class="cap">Los <span id="nc2"></span> conectores según si cambiaron de estado durante la ventana.</div>
-      <div class="cwrap"><canvas id="cParque"></canvas></div></div>
+    <div class="card wide"><h3>Disponibilidad real de la red</h3>
+      <div class="cap">De los <span id="nc2"></span> conectores declarados, cuántos prestan servicio
+        de verdad. Un conector que reportó el mismo estado en todas las capturas del rango no
+        aporta información de uso: o está caído, o bloqueado, o nadie lo usó.</div>
+      <div class="cwrap tall"><canvas id="cParque"></canvas></div></div>
     <div class="card"><h3>Reparto del tiempo total observado</h3>
       <div class="cap">Suma de minutos-conector en cada estado, sobre el parque completo.</div>
       <div class="cwrap"><canvas id="cTiempo"></canvas></div></div>
@@ -316,7 +327,13 @@ tbody tr:hover{background:var(--panel2)}
   </div>
   <div class="charts">
     <div class="card wide"><h3>Estado de la red minuto a minuto</h3>
-      <div class="cap">Conteo de conectores en cada estado, en cada uno de los <span id="nc3"></span> ciclos.</div>
+      <div class="cap">Conteo de conectores en cada estado, captura a captura.
+        El filtro de región es independiente del panel lateral.</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:9px;flex-wrap:wrap">
+        <select id="sReg" style="width:auto;min-width:220px"></select>
+        <label class="chk" style="width:auto"><input type="checkbox" id="sPct">
+          Ver como porcentaje</label>
+      </div>
       <div class="cwrap tall"><canvas id="cSerie"></canvas></div></div>
     <div class="card wide"><h3>Factor de utilización a lo largo de la tarde y noche</h3>
       <div class="cap">Ocupados sobre el total de conectores que reportan (ocupados + disponibles), en cada instante.</div>
@@ -341,9 +358,22 @@ tbody tr:hover{background:var(--panel2)}
 <!-- TERRITORIO -->
 <section class="pane" id="p-terr"><div class="scroll">
   <div class="charts">
-    <div class="card"><h3>Factor de utilización por región</h3>
-      <div class="cap">Solo regiones con al menos 5 conectores en la selección.</div>
+    <div class="card wide"><h3>Utilización por región</h3>
+      <div class="cap">En orden geográfico, de norte a sur. El <b>factor de uso horario</b> es la
+        métrica de fondo: horas efectivamente cargando dividido por las horas que la región
+        <i>podría</i> haber cargado (conectores × horas del rango). Responde cuánta de la
+        capacidad instalada se aprovechó.</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        <button class="chip on" data-rk="">Todas las velocidades</button>
+        <button class="chip" data-rk="0">Lento</button>
+        <button class="chip" data-rk="1">Rápido</button>
+        <button class="chip" data-rk="2">Ultrarrápido</button>
+      </div>
       <div class="cwrap tall"><canvas id="cReg"></canvas></div></div>
+    <div class="card wide"><h3>Horas de carga por región</h3>
+      <div class="cap">Horas-conector efectivamente cargando frente al total de horas
+        disponibles. La barra clara es la capacidad; la oscura, lo usado.</div>
+      <div class="cwrap"><canvas id="cRegH"></canvas></div></div>
     <div class="card"><h3>Comunas con mayor utilización</h3>
       <div class="cap">Top 20 comunas con al menos 3 conectores.</div>
       <div class="cwrap tall"><canvas id="cCom"></canvas></div></div>
@@ -427,6 +457,11 @@ tbody tr:hover{background:var(--panel2)}
           font-family:'JetBrains Mono',monospace;min-height:16px"></div>
         <div style="margin-top:9px;font-size:11px;color:var(--dim2)" id="cxLeg"></div>
       </div>
+      <div class="card wide"><h3>Estado captura a captura</h3>
+        <div class="cap">Cada escalón es una captura. Permite ver transiciones en ventanas
+          cortas: cuándo entró un vehículo, cuánto duró, cuándo se cayó el equipo.
+          Los saltos verticales son los cambios de estado.</div>
+        <div class="cwrap"><canvas id="cxStep"></canvas></div></div>
       <div class="card"><h3>Perfil por hora del día</h3>
         <div class="cap">Porcentaje del tiempo en cada estado, según la hora. Con varios días
           acumulados revela el patrón de uso habitual.</div>
@@ -489,9 +524,22 @@ tbody tr:hover{background:var(--panel2)}
     <li><b>Siempre DISPONIBLE</b> — el equipo funciona y reporta, pero no registró ninguna carga.
       <b>Sí se incluye</b>, con factor de utilización cero, porque es un dato real: es capacidad
       operativa ociosa.</li>
-    <li><b>Siempre OCUPADO</b> — cargando durante toda la ventana. Se incluye, aunque conviene
-      revisarlo caso a caso: puede ser una sesión AC larga legítima o un equipo con el estado
-      trabado.</li>
+    <li><b>Siempre OCUPADO</b> — cargando durante toda la ventana. Se incluye, pero conviene
+      mirarlo con lupa, porque mezcla al menos tres situaciones distintas:
+      <ul>
+        <li><b>Sesión AC larga legítima.</b> Un conector de 3,5 o 7,4 kW en un edificio o
+          estacionamiento de oficina puede tener un auto enchufado toda la noche o toda la
+          jornada laboral. En una ventana corta aparece como ocupado permanente sin que haya
+          nada anómalo.</li>
+        <li><b>Estado trabado.</b> El backend del operador deja de actualizar y el conector
+          queda congelado en OCUPADO. Es la explicación más probable cuando se trata de un
+          equipo DC de alta potencia: una sesión de 150 kW no dura ocho horas.</li>
+        <li><b>Ventana demasiado corta.</b> Con pocas horas de observación, una sola sesión
+          normal cubre todo el rango. Esta categoría solo es interpretable con al menos un
+          día completo.</li>
+      </ul>
+      Para distinguirlos, abre el conector en <b>Zoom conector</b> y amplía el rango: si en
+      varios días nunca se libera, es estado trabado, no uso.</li>
   </ul>
   <p>El selector "Universo de análisis" en el panel lateral permite alternar entre las tres
   definiciones y ver cómo cambia todo lo demás.</p>
@@ -651,6 +699,19 @@ async function cargar(){
 }
 
 /* ---------- constantes base ---------- */
+// Orden geografico norte-sur. Ordenar regiones alfabeticamente o por magnitud
+// oculta el patron territorial, que es justamente lo que interesa mirar.
+const REG_ORDEN = ['Arica y Parinacota','Tarapacá','Antofagasta','Atacama',
+  'Coquimbo','Valparaíso','Metropolitana','Libertador Bernardo OHiggins','Maule',
+  'Ñuble','Biobío','La Araucanía','De los Ríos','Los Lagos',
+  'Aysén del General Carlos Ibáñez del Campo','Magallanes y de la Antartica Chilena'];
+const REG_CORTO = {'Libertador Bernardo OHiggins':"O'Higgins",
+  'Aysén del General Carlos Ibáñez del Campo':'Aysén',
+  'Magallanes y de la Antartica Chilena':'Magallanes',
+  'De los Ríos':'Los Ríos','La Araucanía':'Araucanía',
+  'Arica y Parinacota':'Arica y P.'};
+const rgCorto = r => REG_CORTO[r] || r;
+const rgIdx   = r => { const i=REG_ORDEN.indexOf(r); return i<0?999:i; };
 // Coincidencia por subcadena: en el registro el operador de prueba aparece
 // como "nmaes99 prueba prod patre99 matre99" y el nombre va cambiando.
 const OPC_PRUEBA = ['nmaes99','patre99','matre99','prueba prod'];
@@ -783,6 +844,12 @@ fillSel('fCom',uniq('cm'),'Todas las comunas');
 fillSel('fOp', uniq('op'),'Todos los operadores');
 fillSel('fEs', uniq('es'),'Todos los estándares');
 fillSel('fTc', uniq('tc'),'AC y DC');
+// Selector propio del grafico minuto a minuto, en orden geografico
+$('sReg').innerHTML='<option value="">Todo Chile</option>'+
+  uniq('rg').sort((a,b)=>rgIdx(a)-rgIdx(b))
+    .map(r=>`<option value="${r}">${rgCorto(r)}</option>`).join('');
+$('sReg').onchange=render;
+$('sPct').onchange=render;
 
 const UD={
   op:'Excluye los conectores que estuvieron FUERA DE LÍNEA o NO DISPONIBLES '+
@@ -884,7 +951,7 @@ function drawMap(list){
       txt=EST[mx]+` · ${cnt[1]} cargando de ${s.cs.length}`; }
 
     const esc=Math.min(1+Math.sqrt(s.cs.length)*0.16,1.9);
-    const R=[7,8,11][tier]*esc, L=R*2+5;
+    const R=[5.5,8,11][tier]*esc, L=R*2+5;
     // Transparencia decreciente con el tamano: el ultrarrapido es el mas
     // grande, asi que va mas translucido para no tapar lo que queda debajo.
     const op=[0.62,0.55,0.38][tier];
@@ -989,6 +1056,8 @@ function render(){
   $('sHrs').textContent=A.h.toFixed(0);
   $('sFdl').textContent=A.pfdl.toFixed(0)+'%';
   $('sUso').textContent=A.conUso.toLocaleString('es-CL');
+  $('sConP').textContent='· '+(100*A.n/D.conectores.length).toFixed(0)+'% del parque';
+  $('sUsoP').textContent='· '+(A.n?(100*A.conUso/A.n).toFixed(0):0)+'%';
   {const nAll=D.conectores.length, nExc=D.conectores.filter(o=>o.noop).length;
    {const horas=TOTMIN/60;
    if(horas<12) $('uniDesc').style.borderLeftColor='var(--nd)';
@@ -1011,15 +1080,24 @@ function render(){
 
   /* --- parque (siempre sobre el total, no sobre la selección) --- */
   const all=D.conectores;
-  const clases=['ACTIVO','SIEMPRE FUERA DE LINEA','SIEMPRE NO DISPONIBLE','SIEMPRE DISPONIBLE','SIEMPRE OCUPADO'];
+  const clases=['ACTIVO','SIEMPRE DISPONIBLE','SIEMPRE OCUPADO',
+                'SIEMPRE NO DISPONIBLE','SIEMPRE FUERA DE LINEA'];
+  const etiq=['Con cambios de estado (operativo y en uso)',
+              'Siempre disponible (operativo, sin uso observado)',
+              'Siempre ocupado (revisar: puede estar trabado)',
+              'Siempre no disponible (bloqueado o fuera de horario)',
+              'Siempre fuera de línea (sin reporte del operador)'];
+  const cCol=['#4fb0e8','#3fb950','#F03D85','#f2a63b','#ff4d6d'];
   const cCnt=clases.map(k=>all.filter(o=>o.cls===k).length);
-  chart('cParque',{type:'doughnut',
-    data:{labels:['Con cambios de estado','Siempre fuera de línea','Siempre no disponible',
-                  'Siempre disponible (sin uso)','Siempre ocupado'],
-      datasets:[{data:cCnt,backgroundColor:['#4fb0e8','#ff4d6d','#f2a63b','#3fb950','#F03D85'],
-        borderColor:c('--panel'),borderWidth:2}]},
-    options:{cutout:'56%',plugins:{legend:{position:'right'},tooltip:{callbacks:{
-      label:x=>` ${x.label}: ${x.raw.toLocaleString('es-CL')} (${(100*x.raw/all.length).toFixed(1)}%)`}}}}});
+  chart('cParque',{type:'bar',
+    data:{labels:etiq,datasets:[{data:cCnt,backgroundColor:cCol,
+      borderRadius:3,barThickness:26}]},
+    options:{indexAxis:'y',
+      scales:{x:{beginAtZero:true,title:{display:true,text:'conectores'}},
+              y:{ticks:{autoSkip:false,font:{size:11}}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{
+        label:x=>` ${x.raw.toLocaleString('es-CL')} conectores · `+
+          `${(100*x.raw/all.length).toFixed(1)}% del parque`}}}}});
 
   const At=agg(all);
   chart('cTiempo',{type:'doughnut',
@@ -1054,13 +1132,27 @@ function render(){
     {h:'Siempre disponible',k:'sdisp',n:1,f:r=>r.sdisp}],rowsP);
 
   /* --- evolución --- */
-  const se=serieEstados(L2);
+  // Filtro de region propio de este grafico
+  const regSel = $('sReg').value;
+  const LS = regSel ? L2.filter(o=>o.rg===regSel) : L2;
+  const enPct = $('sPct').checked;
+  let se=serieEstados(LS);
+  if(enPct){
+    const tot=se[0].map((_,i)=>se.reduce((a,s)=>a+s[i],0));
+    se=se.map(s=>s.map((v,i)=>tot[i]?100*v/tot[i]:null));
+  }
   chart('cSerie',{type:'line',
     data:{labels:TSW,datasets:EST.map((e,i)=>({label:e,data:se[i],borderColor:COL[i],
       backgroundColor:COL[i]+'33',fill:true,tension:.25,pointRadius:0,borderWidth:1.6}))},
-    options:{scales:{y:{stacked:true,title:{display:true,text:'conectores'}},
+    options:{scales:{y:{stacked:true,beginAtZero:true,
+        // El eje parte en cero siempre: si arranca en el minimo observado,
+        // una variacion pequena se ve como un cambio dramatico.
+        min:0, max: enPct?100:undefined,
+        title:{display:true,text:enPct?'% de conectores':'conectores'},
+        ticks:{callback:v=>enPct?v+'%':v}},
       x:{ticks:{maxTicksLimit:16}}},interaction:{mode:'index',intersect:false},
-      plugins:{legend:{position:'bottom'}}}});
+      plugins:{legend:{position:'bottom'},
+        title:{display:!!regSel,text:regSel?rgCorto(regSel):'',color:c('--dim')}}}});
 
   chart('cFUt',{type:'line',
     data:{labels:TSW,datasets:[{label:'Factor de utilización',data:serieFU(L2),
@@ -1102,12 +1194,44 @@ function render(){
         label:x=>` ${x.dataset.label}: ${Math.abs(x.raw)}`}}}}});
 
   /* --- territorio --- */
-  const regs=group(L2,'rg').filter(r=>r.n>=5).sort((a,b)=>b.fu-a.fu);
+  // Filtro de velocidad propio de esta pestana
+  const rk = window.__rk===undefined ? '' : window.__rk;
+  const LR = rk==='' ? L2 : L2.filter(o=>o.kb===+rk);
+
+  const regs=group(LR,'rg').filter(r=>r.n>=1)
+             .sort((a,b)=>rgIdx(a.k)-rgIdx(b.k));
+  const horasRango = TOTMIN/60;
+  regs.forEach(r=>{
+    r.hCap = r.n * horasRango;              // horas que PODRIA haber cargado
+    r.fuh  = r.hCap>0 ? 100*r.h/r.hCap : 0; // factor de uso horario
+  });
+
   chart('cReg',{type:'bar',
-    data:{labels:regs.map(r=>r.k),datasets:[{label:'FU',data:regs.map(r=>r.fu),
-      backgroundColor:'#4fb0e8'}]},
-    options:{indexAxis:'y',scales:{x:pct},plugins:{legend:{display:false},
-      tooltip:{callbacks:{label:x=>` FU ${x.raw.toFixed(1)}% · ${regs[x.dataIndex].n} conectores`}}}}});
+    data:{labels:regs.map(r=>rgCorto(r.k)),datasets:[
+      {label:'Ocupados / reportando (FU)',data:regs.map(r=>r.fu),
+       backgroundColor:'#4fb0e8',borderRadius:2},
+      {label:'Factor de uso horario',data:regs.map(r=>r.fuh),
+       backgroundColor:'#F03D85',borderRadius:2}]},
+    options:{indexAxis:'y',
+      scales:{x:{beginAtZero:true,...pct},y:{ticks:{autoSkip:false,font:{size:11}}}},
+      plugins:{legend:{position:'bottom'},tooltip:{callbacks:{
+        title:x=>regs[x[0].dataIndex].k,
+        label:x=>{const r=regs[x.dataIndex];
+          return x.datasetIndex===0
+            ? ` FU ${r.fu.toFixed(1)}% · ${r.conUso} de ${r.n} conectores con uso`
+            : ` Uso horario ${r.fuh.toFixed(2)}% · ${r.h.toFixed(1)} de ${r.hCap.toFixed(0)} h`;}}}}}});
+
+  chart('cRegH',{type:'bar',
+    data:{labels:regs.map(r=>rgCorto(r.k)),datasets:[
+      {label:'Horas disponibles (capacidad)',data:regs.map(r=>r.hCap),
+       backgroundColor:'#22405e',borderRadius:2},
+      {label:'Horas cargando',data:regs.map(r=>r.h),
+       backgroundColor:'#4fb0e8',borderRadius:2}]},
+    options:{scales:{y:{beginAtZero:true,type:'logarithmic',
+        title:{display:true,text:'horas-conector (escala log)'}},
+      x:{ticks:{font:{size:10}}}},
+      plugins:{legend:{position:'bottom'},tooltip:{callbacks:{
+        label:x=>` ${x.dataset.label}: ${x.raw.toFixed(1)} h`}}}}});
 
   const coms=group(L2,'cm').filter(r=>r.n>=3).sort((a,b)=>b.fu-a.fu).slice(0,20);
   chart('cCom',{type:'bar',
@@ -1123,6 +1247,9 @@ function render(){
     {h:'FU',k:'fu',n:1,f:r=>r.fu.toFixed(1)+'%'},
     {h:'',k:'fu',f:r=>`<div class="bar"><i style="width:${Math.min(r.fu,100)}%"></i></div>`},
     {h:'Horas cargando',k:'h',n:1,f:r=>r.h.toFixed(1)},
+    {h:'Horas disponibles',k:'hCap',n:1,f:r=>(r.n*TOTMIN/60).toFixed(0)},
+    {h:'Uso horario',k:'fuh',n:1,
+     f:r=>(100*r.h/(r.n*TOTMIN/60)).toFixed(2)+'%'},
     {h:'Cargas iniciadas',k:'ini',n:1,f:r=>r.ini},
     {h:'% fuera de línea',k:'pfdl',n:1,f:r=>r.pfdl.toFixed(0)+'%'},
     {h:'Con uso',k:'conUso',n:1,f:r=>r.conUso}];
@@ -1275,6 +1402,28 @@ function abrirFicha(id){
 
   pintarTimeline(o);
 
+  // Grafico de escalones: el estado como serie discreta en el tiempo.
+  // stepped:'before' hace que el valor se mantenga hasta la siguiente captura,
+  // que es exactamente lo que sabemos: entre dos capturas no hay informacion.
+  const ORD=[2,3,0,1];                       // fuera, no disp, disponible, ocupado
+  const POS={}; ORD.forEach((e,i)=>POS[e]=i);
+  chart('cxStep',{type:'line',
+    data:{labels:TSW,datasets:[{
+      label:'Estado',
+      data:Array.from(o.sw).map(ch=>POS[+ch]),
+      borderColor:'#8fa8c2',borderWidth:2,stepped:'before',
+      pointRadius:2.5,pointHoverRadius:5,
+      pointBackgroundColor:Array.from(o.sw).map(ch=>COL[+ch]),
+      pointBorderColor:Array.from(o.sw).map(ch=>COL[+ch]),
+      fill:false}]},
+    options:{scales:{
+        y:{min:-0.4,max:3.4,ticks:{stepSize:1,autoSkip:false,
+           callback:v=>EST[ORD[v]]||''},grid:{color:'rgba(34,64,94,.45)'}},
+        x:{ticks:{maxTicksLimit:18,font:{size:10}}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{
+        title:x=>TSFW[x[0].dataIndex],
+        label:x=>' '+EST[ORD[x.raw]]}}}}});
+
   chart('cxPie',{type:'doughnut',
     data:{labels:EST,datasets:[{data:o.m,backgroundColor:COL,
       borderColor:c('--panel'),borderWidth:2}]},
@@ -1376,13 +1525,19 @@ function fijarRango(horas){
   }
   aplicarRango();
 }
-document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+document.querySelectorAll('.chip[data-rk]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.chip[data-rk]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  window.__rk=b.dataset.rk;
+  render();
+});
+document.querySelectorAll('.chip[data-r]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.chip[data-r]').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');
   fijarRango(b.dataset.r==='all'?'all':+b.dataset.r);
 });
 ['rDesde','rHasta'].forEach(id=>$(id).onchange=()=>{
-  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.chip[data-r]').forEach(x=>x.classList.remove('on'));
   aplicarRango();
 });
 
@@ -1446,11 +1601,17 @@ async function cargarLive(){
 function pintarLive(){
   if(!LV) return;
   const e=LV.estados;
+  const tot=LV.total||1;
+  const p=v=>(100*v/tot).toFixed(1)+'%';
   $('lTot').textContent=LV.total.toLocaleString('es-CL');
   $('lOcu').textContent=(e['OCUPADO']||0).toLocaleString('es-CL');
   $('lDis').textContent=(e['DISPONIBLE']||0).toLocaleString('es-CL');
   $('lFdl').textContent=(e['FUERA DE LINEA']||0).toLocaleString('es-CL');
   $('lNd').textContent =(e['NO DISPONIBLE']||0).toLocaleString('es-CL');
+  $('lOcuP').textContent='· '+p(e['OCUPADO']||0);
+  $('lDisP').textContent='· '+p(e['DISPONIBLE']||0);
+  $('lFdlP').textContent='· '+p(e['FUERA DE LINEA']||0);
+  $('lNdP').textContent ='· '+p(e['NO DISPONIBLE']||0);
   $('lFu').textContent =(LV.fu!=null?LV.fu.toFixed(1):'—')+'%';
   $('lTs').textContent =LV.ts;
   const min=Math.round((Date.now()-new Date(LV.ts.replace(' ','T')+'-04:00'))/60000);
@@ -1470,7 +1631,7 @@ function pintarLive(){
   (LV.mapa||[]).forEach(s=>{
     const col = s.o>0 ? '#4fb0e8' : (s.d>0 ? '#3fb950' : '#ff4d6d');
     const tier = s.kb===undefined ? 1 : s.kb;
-    const R=[7,8,11][tier]*(s.o>0?1.25:1), L=R*2+5, op=[0.62,0.55,0.38][tier];
+    const R=[5.5,8,11][tier]*(s.o>0?1.25:1), L=R*2+5, op=[0.68,0.55,0.38][tier];
     const forma = tier===0
       ? `<polygon points="${L/2},2.5 ${L-2.5},${L-3.5} 2.5,${L-3.5}" fill="${col}"
            fill-opacity="${op}" stroke="${col}" stroke-width="1.5" stroke-linejoin="round"/>`
@@ -1504,6 +1665,23 @@ function pintarLive(){
     {h:'Conectores',k:'tot',n:1,f:r=>r.tot}],(LV.cargando||[]).slice());
 }
 $('lRefresh').onclick=()=>{cargarLive(); refrescarHistorico();};
+
+// Ampliar el mapa en vivo a pantalla completa
+let lGrande=false;
+$('lExp').onclick=()=>{
+  const card=$('cardLiveMap'), m=$('liveMap');
+  lGrande=!lGrande;
+  if(lGrande){
+    card.style.cssText='position:fixed;inset:12px;z-index:5000;margin:0;overflow:auto';
+    m.style.height='calc(100vh - 150px)';
+    $('lExp').textContent='Reducir';
+  }else{
+    card.style.cssText='';
+    m.style.height='420px';
+    $('lExp').textContent='Ampliar';
+  }
+  setTimeout(()=>lmap&&lmap.invalidateSize(),120);
+};
 setInterval(cargarLive, REFRESCO_MS);
 
 /* Recarga el dia en curso y vuelve a pintar, conservando los filtros y la
