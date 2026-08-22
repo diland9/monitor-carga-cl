@@ -443,26 +443,53 @@ const DATA_URL = "data/historico.json.gz";
 const LIVE_URL = "data/live.json";
 
 let D;
+
+/* GitHub Pages sirve los .gz como binario, sin cabecera Content-Encoding, asi
+   que el navegador no los descomprime solo. Se detecta la firma gzip (1f 8b) y
+   se descomprime con DecompressionStream. Si el servidor si descomprimio (como
+   hace Cloud Storage), los bytes ya son texto y se decodifican directo. */
+async function traerJSON(url){
+  const r = await fetch(url, {cache:'no-cache'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const buf = await r.arrayBuffer();
+  const b = new Uint8Array(buf);
+  let txt;
+  if(b.length>2 && b[0]===0x1f && b[1]===0x8b){
+    if(typeof DecompressionStream === 'undefined')
+      throw new Error('Este navegador no puede descomprimir gzip. Usa Chrome, Edge o Firefox actualizado.');
+    const s = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+    txt = await new Response(s).text();
+  }else{
+    txt = new TextDecoder().decode(buf);
+  }
+  return JSON.parse(txt);
+}
+
+/* El histórico puede no existir todavía (solo hay una captura, o la
+   consolidación aún no ha corrido). Eso no debe impedir usar la pestaña En
+   vivo, así que el fallo se avisa dentro de las pestañas históricas en vez de
+   bloquear la página entera. */
+function avisoSinHistorico(msg){
+  const txt = '<div class="warn" style="margin:20px">'+
+    '<b>Todavía no hay histórico.</b><br><br>'+msg+'<br><br>'+
+    'El histórico se genera con el workflow <code>Consolidar y publicar</code> '+
+    'y necesita al menos unas cuantas capturas acumuladas. '+
+    'La pestaña <b>En vivo</b> funciona igual.</div>';
+  ['mapa','parque','evo','terr','oper','conn'].forEach(t=>{
+    const p = document.getElementById('p-'+t);
+    if(p) p.innerHTML = txt;
+  });
+}
+
 async function cargar(){
-  const el = document.createElement('div');
-  el.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;'+
-    'justify-content:center;background:#0b1622;z-index:9999;flex-direction:column;gap:14px';
-  el.innerHTML = '<div style="font-family:Barlow Condensed,sans-serif;font-size:20px;'+
-    'text-transform:uppercase;letter-spacing:1px;color:#4fb0e8">Cargando datos</div>'+
-    '<div id="loadmsg" style="color:#5f7d9c;font-size:12px">Conectando…</div>';
-  document.body.appendChild(el);
   try{
-    const r = await fetch(DATA_URL, {cache:'no-cache'});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    document.getElementById('loadmsg').textContent = 'Procesando…';
-    D = await r.json();
-    el.remove();
+    D = await traerJSON(DATA_URL);
+    if(!D || !D.conectores || !D.conectores.length)
+      throw new Error('el archivo no trae conectores');
+    return true;
   }catch(e){
-    document.getElementById('loadmsg').innerHTML =
-      'No se pudo cargar <code style="color:#FFC7E3">'+DATA_URL+'</code><br><br>'+
-      'Revisa que el objeto exista y tenga lectura pública.<br>'+
-      '<span style="color:#ff4d6d">'+e.message+'</span>';
-    throw e;
+    avisoSinHistorico('No se pudo leer <code>'+DATA_URL+'</code>: '+e.message);
+    return false;
   }
 }
 const EST = ['DISPONIBLE','OCUPADO','FUERA DE LINEA','NO DISPONIBLE'];
@@ -899,10 +926,11 @@ $('play').onclick=()=>{
 let LV=null, lmap=null, llayer=null;
 async function cargarLive(){
   try{
-    const r=await fetch(LIVE_URL+'?t='+Date.now(),{cache:'no-store'});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    LV=await r.json(); pintarLive();
-  }catch(e){ $('lEdad').innerHTML='<span style="color:#ff4d6d">sin datos en vivo</span>'; }
+    LV = await traerJSON(LIVE_URL+'?t='+Date.now());
+    pintarLive();
+  }catch(e){
+    $('lEdad').innerHTML='<span style="color:#ff4d6d">sin datos en vivo: '+e.message+'</span>';
+  }
 }
 function pintarLive(){
   if(!LV) return;
@@ -962,7 +990,8 @@ setInterval(cargarLive, 120000);   // refresca cada 2 minutos
 
 // arranque
 cargarLive();
-cargar().then(()=>{
+cargar().then(ok=>{
+  if(!ok) return;
   init();
   render();
   setTimeout(()=>map.invalidateSize(),200);
