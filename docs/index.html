@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monitor de la red de carga pública · Chile</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0b1622; --panel:#111f30; --panel2:#16293e; --line:#22405e;
+  --txt:#e8f0f8; --dim:#8fa8c2; --dim2:#5f7d9c;
+  --disp:#3fb950; --ocup:#4fb0e8; --fdl:#ff4d6d; --nd:#f2a63b;
+  --accent:#4fb0e8; --cms:#F03D85; --cms2:#FFC7E3;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--ink);color:var(--txt);
+  font-family:Inter,system-ui,sans-serif;font-size:13px;overflow:hidden}
+body{display:flex;flex-direction:column}
+
+header{display:flex;align-items:baseline;gap:18px;padding:12px 20px;
+  border-bottom:1px solid var(--line);background:var(--panel);flex:0 0 auto}
+header h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:24px;
+  letter-spacing:.4px;margin:0;text-transform:uppercase}
+header h1 span{color:var(--accent)}
+header .sub{color:var(--dim);font-size:12px}
+header .src{margin-left:auto;color:var(--dim2);font-size:11px;font-family:'JetBrains Mono',monospace;text-align:right}
+
+nav{display:flex;gap:2px;padding:0 20px;background:var(--panel);
+  border-bottom:1px solid var(--line);flex:0 0 auto;overflow-x:auto}
+nav button{background:none;border:none;color:var(--dim);padding:9px 16px;cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.6px;border-bottom:2px solid transparent;white-space:nowrap}
+nav button:hover{color:var(--txt)}
+nav button.on{color:var(--accent);border-bottom-color:var(--accent)}
+nav button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+main{flex:1;display:flex;min-height:0}
+aside{width:290px;flex:0 0 290px;background:var(--panel);border-right:1px solid var(--line);
+  overflow-y:auto;padding:14px}
+.pane{flex:1;min-width:0;display:none;position:relative}
+.pane.on{display:flex;flex-direction:column}
+.scroll{overflow-y:auto;padding:16px 20px}
+
+.fgroup{margin-bottom:16px}
+.flabel{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;
+  text-transform:uppercase;letter-spacing:1px;color:var(--dim2);margin-bottom:6px}
+select,input[type=search]{width:100%;background:var(--panel2);border:1px solid var(--line);
+  color:var(--txt);padding:7px 8px;border-radius:4px;font-family:Inter,sans-serif;font-size:12.5px}
+select:focus,input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.chk{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:4px;cursor:pointer}
+.chk:hover{background:var(--panel2)}
+.chk input{accent-color:var(--accent);width:14px;height:14px}
+.chk .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.chk .cnt{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim2)}
+button.act{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  padding:8px;border-radius:4px;cursor:pointer;font-size:12.5px}
+button.act:hover{border-color:var(--accent);color:var(--accent)}
+
+.stats{display:flex;gap:1px;background:var(--line);border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
+.stat{flex:1;min-width:110px;background:var(--panel);padding:10px 14px}
+.stat .n{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:700;line-height:1}
+.stat .l{color:var(--dim2);font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;margin-top:3px}
+.stat.hl .n{color:var(--accent)}
+.stat.warn .n{color:var(--fdl)}
+
+#map{flex:1;min-height:0;background:#0a1420}
+.legend{position:absolute;bottom:64px;right:14px;background:rgba(17,31,48,.94);
+  border:1px solid var(--line);border-radius:5px;padding:9px 11px;font-size:11px;z-index:600;line-height:1.9}
+.legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
+.timebar{display:flex;align-items:center;gap:12px;padding:9px 16px;background:var(--panel);
+  border-top:1px solid var(--line);flex:0 0 auto}
+.timebar button{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  width:34px;height:30px;border-radius:4px;cursor:pointer;font-size:13px}
+.timebar button:hover{border-color:var(--accent);color:var(--accent)}
+.timebar input[type=range]{flex:1;accent-color:var(--accent)}
+.timebar .yr{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent);
+  min-width:92px;font-weight:500}
+.timebar .mode{color:var(--dim2);font-size:11px}
+
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
+.card.wide{grid-column:1/-1}
+.card h3{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.7px;margin:0 0 3px;color:var(--txt)}
+.card .cap{color:var(--dim2);font-size:11px;margin-bottom:11px;line-height:1.5}
+.cwrap{position:relative;height:290px}
+.cwrap.tall{height:400px}
+
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{font-family:'Barlow Condensed',sans-serif;font-size:11.5px;text-transform:uppercase;
+  letter-spacing:.7px;color:var(--dim2);text-align:left;padding:7px 8px;
+  border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);cursor:pointer}
+th:hover{color:var(--accent)}
+td{padding:6px 8px;border-bottom:1px solid rgba(34,64,94,.4)}
+tbody tr:hover{background:var(--panel2)}
+.num{font-family:'JetBrains Mono',monospace;text-align:right;font-size:11.5px}
+.bar{height:5px;background:var(--panel2);border-radius:3px;overflow:hidden;min-width:52px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.tw{max-height:520px;overflow-y:auto}
+
+.warn{background:rgba(242,166,59,.09);border:1px solid rgba(242,166,59,.32);
+  border-left:3px solid var(--nd);border-radius:5px;padding:12px 14px;margin-bottom:16px;
+  font-size:12.3px;line-height:1.65;color:var(--dim)}
+.warn b{color:var(--txt)}
+.warn code{font-family:'JetBrains Mono',monospace;background:var(--panel2);
+  padding:1px 5px;border-radius:3px;font-size:11.5px;color:var(--cms2)}
+.prose{max-width:860px;line-height:1.72;color:var(--dim);font-size:13px}
+.prose h2{font-family:'Barlow Condensed',sans-serif;font-size:19px;text-transform:uppercase;
+  letter-spacing:.7px;color:var(--txt);margin:26px 0 9px;border-bottom:1px solid var(--line);padding-bottom:5px}
+.prose h2:first-child{margin-top:0}
+.prose b,.prose strong{color:var(--txt)}
+.prose code{font-family:'JetBrains Mono',monospace;background:var(--panel2);
+  padding:1.5px 6px;border-radius:3px;font-size:11.5px;color:var(--cms2)}
+.prose ul{padding-left:19px}.prose li{margin-bottom:6px}
+.formula{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:5px;padding:14px 16px;margin:14px 0;font-family:'JetBrains Mono',monospace;
+  font-size:12.5px;color:var(--txt);line-height:1.85}
+.leaflet-popup-content-wrapper{background:var(--panel);color:var(--txt);border-radius:5px;
+  border:1px solid var(--line)}
+.leaflet-popup-tip{background:var(--panel)}
+.leaflet-popup-content{margin:11px 13px;font-size:12px;line-height:1.6}
+.leaflet-container{background:#0a1420}
+.pill{display:inline-block;padding:1.5px 7px;border-radius:9px;font-size:10.5px;
+  font-family:'JetBrains Mono',monospace}
+@keyframes pulso{0%{box-shadow:0 0 0 0 rgba(63,185,80,.7)}
+  70%{box-shadow:0 0 0 9px rgba(63,185,80,0)}100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}}
+@media (max-width:820px){
+  aside{position:absolute;z-index:900;height:100%;transform:translateX(-100%);transition:transform .2s}
+  aside.open{transform:none}
+  .charts{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Monitor de la <span>red de carga</span></h1>
+  <div class="sub">Chile · <span id="hVentana"></span></div>
+  <div class="src">
+    cargadorespublicos.cl · Ministerio de Energía / SEC<br>
+    <span id="hCiclos"></span>
+  </div>
+</header>
+
+<nav>
+  <button class="on" data-t="live">En vivo</button>
+  <button data-t="mapa">Mapa</button>
+  <button data-t="parque">Estado del parque</button>
+  <button data-t="evo">Evolución temporal</button>
+  <button data-t="terr">Comunas y regiones</button>
+  <button data-t="oper">Operadores</button>
+  <button data-t="conn">Conectores</button>
+  <button data-t="metodo">Metodología</button>
+</nav>
+
+<main>
+<aside id="side">
+  <div class="fgroup">
+    <div class="flabel">Universo de análisis</div>
+    <select id="fUni">
+      <option value="op">Operativos — excluye inmóviles caídos</option>
+      <option value="mov">Solo con cambios de estado</option>
+      <option value="all">Todo el parque declarado</option>
+    </select>
+    <div style="color:var(--dim2);font-size:11px;margin-top:6px;line-height:1.5" id="uniDesc"></div>
+  </div>
+  <div class="fgroup"><div class="flabel">Región</div><select id="fReg"></select></div>
+  <div class="fgroup"><div class="flabel">Comuna</div><select id="fCom"></select></div>
+  <div class="fgroup"><div class="flabel">Operador</div><select id="fOp"></select></div>
+  <div class="fgroup"><div class="flabel">Estándar de conector</div><select id="fEs"></select></div>
+  <div class="fgroup"><div class="flabel">Tipo de corriente</div><select id="fTc"></select></div>
+  <div class="fgroup">
+    <div class="flabel">Potencia</div>
+    <label class="chk"><input type="checkbox" class="fkw" value="0" checked><span class="dot" style="background:var(--disp)"></span>Lento · &lt;22 kW<span class="cnt" id="nkw0"></span></label>
+    <label class="chk"><input type="checkbox" class="fkw" value="1" checked><span class="dot" style="background:var(--nd)"></span>Semirrápido · 22–49<span class="cnt" id="nkw1"></span></label>
+    <label class="chk"><input type="checkbox" class="fkw" value="2" checked><span class="dot" style="background:var(--ocup)"></span>Rápido · 50–149<span class="cnt" id="nkw2"></span></label>
+    <label class="chk"><input type="checkbox" class="fkw" value="3" checked><span class="dot" style="background:var(--cms)"></span>Ultrarrápido · ≥150<span class="cnt" id="nkw3"></span></label>
+  </div>
+  <div class="fgroup"><div class="flabel">Buscar</div>
+    <input type="search" id="q" placeholder="Nombre de sitio o comuna"></div>
+  <div class="fgroup"><button class="act" id="reset">Limpiar todos los filtros</button></div>
+  <div class="fgroup"><button class="act" id="zoom">Ajustar mapa a la selección</button></div>
+</aside>
+
+<!-- EN VIVO -->
+<section class="pane on" id="p-live">
+  <div class="stats">
+    <div class="stat"><div class="n" id="lTot">—</div><div class="l">Conectores</div></div>
+    <div class="stat" style="--c:var(--ocup)"><div class="n" id="lOcu" style="color:var(--ocup)">—</div><div class="l">Cargando ahora</div></div>
+    <div class="stat"><div class="n" id="lDis" style="color:var(--disp)">—</div><div class="l">Disponibles</div></div>
+    <div class="stat warn"><div class="n" id="lFdl">—</div><div class="l">Fuera de línea</div></div>
+    <div class="stat"><div class="n" id="lNd" style="color:var(--nd)">—</div><div class="l">No disponibles</div></div>
+    <div class="stat hl"><div class="n" id="lFu">—</div><div class="l">Factor de utilización</div></div>
+  </div>
+  <div class="scroll">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;color:var(--dim2);font-size:12px">
+      <span id="pulso" style="width:8px;height:8px;border-radius:50%;background:var(--disp);
+        box-shadow:0 0 0 0 rgba(63,185,80,.7);animation:pulso 2s infinite"></span>
+      <span>Última captura: <b id="lTs" style="color:var(--txt)">—</b></span>
+      <span id="lEdad"></span>
+      <button class="act" style="width:auto;padding:5px 12px;margin-left:auto" id="lRefresh">Actualizar</button>
+    </div>
+    <div class="charts">
+      <div class="card"><h3>Dónde se está cargando ahora</h3>
+        <div class="cap">Sitios con al menos un conector ocupado en este instante.</div>
+        <div id="liveMap" style="height:400px;border-radius:5px"></div></div>
+      <div class="card"><h3>Estado de la red</h3>
+        <div class="cap">Reparto instantáneo de los conectores declarados.</div>
+        <div class="cwrap"><canvas id="lPie"></canvas></div></div>
+      <div class="card"><h3>Por operador</h3>
+        <div class="cap">Conectores cargando sobre el total de cada operador.</div>
+        <div class="cwrap"><canvas id="lOp"></canvas></div></div>
+      <div class="card"><h3>Por región</h3>
+        <div class="cwrap"><canvas id="lReg"></canvas></div></div>
+      <div class="card wide"><h3>Sitios con más conectores ocupados</h3>
+        <div class="tw" style="max-height:340px"><table id="lTab"></table></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- MAPA -->
+<section class="pane" id="p-mapa">
+  <div class="stats">
+    <div class="stat"><div class="n" id="sCon">0</div><div class="l">Conectores</div></div>
+    <div class="stat"><div class="n" id="sSit">0</div><div class="l">Sitios</div></div>
+    <div class="stat hl"><div class="n" id="sFU">0%</div><div class="l">Factor de utilización</div></div>
+    <div class="stat"><div class="n" id="sHrs">0</div><div class="l">Horas-conector cargando</div></div>
+    <div class="stat warn"><div class="n" id="sFdl">0%</div><div class="l">Tiempo fuera de línea</div></div>
+    <div class="stat"><div class="n" id="sUso">0</div><div class="l">Con al menos una carga</div></div>
+  </div>
+  <div id="map"></div>
+  <div class="legend" id="lg"></div>
+  <div class="timebar">
+    <button id="play" title="Reproducir">&#9654;</button>
+    <span class="yr" id="tLbl">Periodo completo</span>
+    <input type="range" id="slider" min="-1" max="0" value="-1" step="1">
+    <span class="mode" id="tMode">Color = factor de utilización del período</span>
+  </div>
+</section>
+
+<!-- PARQUE -->
+<section class="pane" id="p-parque"><div class="scroll">
+  <div class="warn">
+    <b>Punto de partida del análisis.</b> Antes de medir utilización hay que separar el parque
+    declarado del parque que efectivamente reporta. Un conector que informó el mismo estado en
+    los <span id="nc1"></span> ciclos de observación no aporta información de uso: o está caído,
+    o está permanentemente bloqueado, o simplemente nadie lo usó. Los tres casos son distintos y
+    se separan abajo.
+  </div>
+  <div class="charts">
+    <div class="card"><h3>Composición del parque</h3>
+      <div class="cap">Los <span id="nc2"></span> conectores según si cambiaron de estado durante la ventana.</div>
+      <div class="cwrap"><canvas id="cParque"></canvas></div></div>
+    <div class="card"><h3>Reparto del tiempo total observado</h3>
+      <div class="cap">Suma de minutos-conector en cada estado, sobre el parque completo.</div>
+      <div class="cwrap"><canvas id="cTiempo"></canvas></div></div>
+    <div class="card wide"><h3>Conectores inmóviles por operador</h3>
+      <div class="cap">Conectores que nunca cambiaron de estado, desglosados por el estado en que quedaron
+        congelados. Es el indicador más robusto en una ventana corta: no depende de estimar duraciones.</div>
+      <div class="cwrap tall"><canvas id="cInmOp"></canvas></div></div>
+    <div class="card wide"><h3>Detalle por operador</h3>
+      <div class="cap">Ordena por cualquier columna. El % inmóvil no operativo suma los congelados en
+        fuera de línea y no disponible.</div>
+      <div class="tw"><table id="tParque"></table></div></div>
+  </div>
+</div></section>
+
+<!-- EVOLUCION -->
+<section class="pane" id="p-evo"><div class="scroll">
+  <div class="warn">
+    <b>Resolución temporal.</b> El muestreo es cada 5 minutos, salvo un ciclo de 18 minutos por
+    un corte de la captura. Cada ciclo pesa por los minutos que representa, no por igual. Una
+    sesión más corta que el intervalo puede caer entre dos observaciones y no verse.
+  </div>
+  <div class="charts">
+    <div class="card wide"><h3>Estado de la red minuto a minuto</h3>
+      <div class="cap">Conteo de conectores en cada estado, en cada uno de los <span id="nc3"></span> ciclos.</div>
+      <div class="cwrap tall"><canvas id="cSerie"></canvas></div></div>
+    <div class="card wide"><h3>Factor de utilización a lo largo de la tarde y noche</h3>
+      <div class="cap">Ocupados sobre el total de conectores que reportan (ocupados + disponibles), en cada instante.</div>
+      <div class="cwrap"><canvas id="cFUt"></canvas></div></div>
+    <div class="card"><h3>Utilización por región en el tiempo</h3>
+      <div class="cap">Las seis regiones con más conectores en la selección.</div>
+      <div class="cwrap"><canvas id="cRegT"></canvas></div></div>
+    <div class="card"><h3>Utilización por operador en el tiempo</h3>
+      <div class="cap">Los seis operadores con más conectores en la selección.</div>
+      <div class="cwrap"><canvas id="cOpT"></canvas></div></div>
+    <div class="card wide"><h3>Cargas que empiezan y que terminan</h3>
+      <div class="cap">Transiciones detectadas entre ciclos consecutivos. Disponible→Ocupado es un inicio de carga;
+        Ocupado→Disponible es un término.</div>
+      <div class="cwrap"><canvas id="cFlujo"></canvas></div></div>
+  </div>
+</div></section>
+
+<!-- TERRITORIO -->
+<section class="pane" id="p-terr"><div class="scroll">
+  <div class="charts">
+    <div class="card"><h3>Factor de utilización por región</h3>
+      <div class="cap">Solo regiones con al menos 5 conectores en la selección.</div>
+      <div class="cwrap tall"><canvas id="cReg"></canvas></div></div>
+    <div class="card"><h3>Comunas con mayor utilización</h3>
+      <div class="cap">Top 20 comunas con al menos 3 conectores.</div>
+      <div class="cwrap tall"><canvas id="cCom"></canvas></div></div>
+    <div class="card wide"><h3>Todas las comunas</h3>
+      <div class="cap">Ordena por cualquier columna. Horas-conector = suma del tiempo en estado ocupado.</div>
+      <div class="tw"><table id="tCom"></table></div></div>
+    <div class="card wide"><h3>Todas las regiones</h3>
+      <div class="tw"><table id="tReg"></table></div></div>
+  </div>
+</div></section>
+
+<!-- OPERADORES -->
+<section class="pane" id="p-oper"><div class="scroll">
+  <div class="charts">
+    <div class="card"><h3>Factor de utilización por operador</h3>
+      <div class="cap">Tiempo cargando sobre tiempo reportando.</div>
+      <div class="cwrap"><canvas id="cOpFU"></canvas></div></div>
+    <div class="card"><h3>Reparto del tiempo por operador</h3>
+      <div class="cap">Porcentaje del tiempo total de cada operador en cada estado.</div>
+      <div class="cwrap"><canvas id="cOpEst"></canvas></div></div>
+    <div class="card"><h3>Factor de utilización por estándar</h3>
+      <div class="cap">CCS 2, CHAdeMO, Tipo 2, GB/T y demás.</div>
+      <div class="cwrap"><canvas id="cEs"></canvas></div></div>
+    <div class="card"><h3>Factor de utilización por potencia</h3>
+      <div class="cap">Cuatro tramos de potencia nominal del conector.</div>
+      <div class="cwrap"><canvas id="cKw"></canvas></div></div>
+    <div class="card wide"><h3>Detalle por operador</h3>
+      <div class="tw"><table id="tOp"></table></div></div>
+    <div class="card wide"><h3>Detalle por estándar de conector</h3>
+      <div class="tw"><table id="tEs"></table></div></div>
+  </div>
+</div></section>
+
+<!-- CONECTORES -->
+<section class="pane" id="p-conn"><div class="scroll">
+  <div class="warn">
+    <b>Los puntos calientes.</b> Un factor de utilización de 100% significa que el conector estuvo
+    cargando durante toda la ventana observada. En 6 horas eso es posible en carga lenta AC, donde
+    una sola sesión cubre el período completo. No implica alta rotación de vehículos.
+  </div>
+  <div class="charts">
+    <div class="card wide"><h3>Conectores ordenados por utilización</h3>
+      <div class="cap">Haz clic en una fila para centrar el mapa en ese conector. La barra muestra el
+        reparto del tiempo: azul cargando, verde disponible, rojo fuera de línea, ámbar no disponible.</div>
+      <div class="tw" style="max-height:none"><table id="tCon"></table></div></div>
+  </div>
+</div></section>
+
+<!-- METODOLOGIA -->
+<section class="pane" id="p-metodo"><div class="scroll"><div class="prose">
+  <h2>Qué mide este panel</h2>
+  <p>Cada 5 minutos se consultó el API público de <code>cargadorespublicos.cl</code>, el mapa del
+  Ministerio de Energía alimentado por las declaraciones que los operadores hacen a la SEC. Cada
+  consulta devuelve el estado declarado de cada conector de la red. Poniendo esas fotos en
+  secuencia se obtiene, para cada conector, una línea de tiempo de estados.</p>
+  <p id="mVentana"></p>
+
+  <h2>Cómo se calcula el factor de utilización</h2>
+  <p>El factor de utilización es la fracción del tiempo que un conector pasó en estado
+  <b>OCUPADO</b>, es decir, cargando un vehículo:</p>
+  <div class="formula">
+    FU = minutos en OCUPADO ÷ (minutos en OCUPADO + minutos en DISPONIBLE) × 100
+  </div>
+  <p>Tres decisiones importantes están dentro de esa fórmula:</p>
+  <ul>
+    <li><b>El denominador excluye el tiempo fuera de línea y no disponible.</b> Un conector caído
+      no está "disponible y sin uso": simplemente no hay información sobre su uso. Si se contara
+      como disponible, los conectores más caídos aparecerían artificialmente como los menos
+      utilizados, que es exactamente al revés de lo que ocurre.</li>
+    <li><b>Cada ciclo pesa por los minutos que representa</b>, con la regla del trapecio: la mitad
+      del intervalo anterior más la mitad del siguiente. Esto importa porque un ciclo duró 18
+      minutos en vez de 5 por un corte de la captura, y contarlo igual que los demás sesgaría el
+      resultado.</li>
+    <li><b>Es tiempo, no energía.</b> Un conector ocupado puede estar entregando 3 kW o 150 kW. El
+      factor de utilización mide ocupación temporal y no permite derivar consumo.</li>
+  </ul>
+  <p>El panel también muestra el <b>FU bruto</b> en las tablas: la misma fracción pero sobre la
+  ventana completa, incluyendo el tiempo caído. Comparar ambos revela cuánto del bajo uso de un
+  conector se explica por falta de demanda y cuánto por indisponibilidad.</p>
+
+  <h2>Por qué se excluyen los conectores inmóviles</h2>
+  <p>Un conector que reportó el mismo estado en los <span id="mCiclos"></span> ciclos no cambió
+  nunca. Se separan en cuatro casos, porque significan cosas distintas:</p>
+  <ul>
+    <li><b>Siempre FUERA DE LINEA</b> — el operador no reportó comunicación con el equipo en
+      ningún momento. Se excluye del universo operativo.</li>
+    <li><b>Siempre NO DISPONIBLE</b> — declarado como no disponible de forma permanente durante la
+      ventana. También se excluye.</li>
+    <li><b>Siempre DISPONIBLE</b> — el equipo funciona y reporta, pero no registró ninguna carga.
+      <b>Sí se incluye</b>, con factor de utilización cero, porque es un dato real: es capacidad
+      operativa ociosa.</li>
+    <li><b>Siempre OCUPADO</b> — cargando durante toda la ventana. Se incluye, aunque conviene
+      revisarlo caso a caso: puede ser una sesión AC larga legítima o un equipo con el estado
+      trabado.</li>
+  </ul>
+  <p>El selector "Universo de análisis" en el panel lateral permite alternar entre las tres
+  definiciones y ver cómo cambia todo lo demás.</p>
+
+  <h2>Los cuatro estados y qué significan</h2>
+  <ul>
+    <li><b>DISPONIBLE</b> — libre y operativo según el operador.</li>
+    <li><b>OCUPADO</b> — con un vehículo cargando.</li>
+    <li><b>FUERA DE LINEA</b> — sin comunicación con el backend del operador. <b>No significa
+      averiado.</b> Agrupa equipos sin conectividad, instalaciones declaradas pero no energizadas,
+      y operadores que no reportan estado en tiempo real.</li>
+    <li><b>NO DISPONIBLE</b> — declarado explícitamente como no disponible: mantención, bloqueo,
+      reserva, o fuera de horario en sitios que no operan 24/7.</li>
+  </ul>
+
+  <h2>Límites de esta ventana de observación</h2>
+  <ul>
+    <li><b>Son horas, no semanas.</b> La ventana cubre una tarde y noche de un solo día. Sirve
+      para ver el patrón horario de esa jornada y para identificar qué conectores nunca
+      reportaron. No sirve para rankear conectores por uso habitual ni para afirmar que uno está
+      subutilizado: la varianza entre días es alta.</li>
+    <li><b>Un solo día de la semana.</b> No hay comparación entre día hábil y fin de semana.</li>
+    <li><b>Sesiones cortas invisibles.</b> Una carga de menos de 5 minutos puede empezar y
+      terminar entre dos observaciones consecutivas.</li>
+    <li><b>Todo depende del reporte del operador.</b> Un operador con mala integración al backend
+      de la SEC aparece con más tiempo fuera de línea aunque su hardware esté igual de operativo.
+      La diferencia entre operadores mezcla calidad de equipo con calidad de reporte.</li>
+    <li><b>La disponibilidad medida es la que ve el usuario en la app</b>, que es un dato válido y
+      relevante, pero no es disponibilidad técnica del equipo.</li>
+  </ul>
+
+  <h2>Cómo se reconstruyó la serie</h2>
+  <p>El monitor guarda el estado final de todos los conectores y una bitácora de cada cambio de
+  estado con su instante. Partiendo del estado final y recorriendo la bitácora hacia atrás se
+  recupera el estado de cada conector en cada ciclo. La reconstrucción se validó contra los
+  totales por estado que el monitor registró de forma independiente en cada ciclo: la diferencia
+  máxima fue de <b>un conector</b> en un ciclo, sobre 2.254.</p>
+</div></div></section>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// Rutas relativas: GitHub Pages sirve la carpeta docs/ como raiz del sitio.
+const DATA_URL = "data/historico.json.gz";
+const LIVE_URL = "data/live.json";
+
+let D;
+async function cargar(){
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;'+
+    'justify-content:center;background:#0b1622;z-index:9999;flex-direction:column;gap:14px';
+  el.innerHTML = '<div style="font-family:Barlow Condensed,sans-serif;font-size:20px;'+
+    'text-transform:uppercase;letter-spacing:1px;color:#4fb0e8">Cargando datos</div>'+
+    '<div id="loadmsg" style="color:#5f7d9c;font-size:12px">Conectando…</div>';
+  document.body.appendChild(el);
+  try{
+    const r = await fetch(DATA_URL, {cache:'no-cache'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    document.getElementById('loadmsg').textContent = 'Procesando…';
+    D = await r.json();
+    el.remove();
+  }catch(e){
+    document.getElementById('loadmsg').innerHTML =
+      'No se pudo cargar <code style="color:#FFC7E3">'+DATA_URL+'</code><br><br>'+
+      'Revisa que el objeto exista y tenga lectura pública.<br>'+
+      '<span style="color:#ff4d6d">'+e.message+'</span>';
+    throw e;
+  }
+}
+const EST = ['DISPONIBLE','OCUPADO','FUERA DE LINEA','NO DISPONIBLE'];
+const COL = ['#3fb950','#4fb0e8','#ff4d6d','#f2a63b'];
+const CSS = getComputedStyle(document.documentElement);
+const c = n => CSS.getPropertyValue(n).trim();
+
+/* ---------- métricas por conector ---------- */
+function kwBucket(k){ return k<22?0 : k<50?1 : k<150?2 : 3; }
+let W, NC, TOTMIN;
+function calcular(){
+W = D.w; NC = D.meta.n_ciclos; TOTMIN = W.reduce((a,b)=>a+b,0);
+D.conectores.forEach(o=>{
+  const m=[0,0,0,0];
+  for(let i=0;i<NC;i++) m[+o.s[i]] += W[i];
+  o.m = m;                                  // minutos por estado
+  o.tot = m[0]+m[1]+m[2]+m[3];
+  o.inf = m[0]+m[1];                        // tiempo informativo
+  o.fu  = o.inf>0 ? 100*m[1]/o.inf : null;  // factor de utilización
+  o.fub = 100*m[1]/o.tot;                   // FU bruto
+  o.pfdl= 100*m[2]/o.tot;
+  o.pnd = 100*m[3]/o.tot;
+  o.h   = m[1]/60;                          // horas cargando
+  o.kb  = kwBucket(o.kw);
+  let mv=false; for(let i=1;i<NC;i++) if(o.s[i]!==o.s[0]){mv=true;break;}
+  o.mov = mv;
+  o.cls = mv ? 'ACTIVO' : ('SIEMPRE '+EST[+o.s[0]]);
+  o.noop = !mv && (o.s[0]==='2'||o.s[0]==='3');   // inmóvil no operativo
+  // transiciones
+  o.ini=0; o.fin=0;
+  for(let i=1;i<NC;i++){
+    if(o.s[i-1]==='0'&&o.s[i]==='1') o.ini++;
+    if(o.s[i-1]==='1'&&o.s[i]==='0') o.fin++;
+  }
+});
+
+}
+
+/* ---------- filtros ---------- */
+const F = {uni:'op', reg:'', com:'', op:'', es:'', tc:'', kw:[0,1,2,3], q:''};
+function sel(){
+  const q=F.q.toLowerCase();
+  return D.conectores.filter(o=>{
+    if(F.uni==='op'  && o.noop) return false;
+    if(F.uni==='mov' && !o.mov) return false;
+    if(F.reg && o.rg!==F.reg) return false;
+    if(F.com && o.cm!==F.com) return false;
+    if(F.op  && o.op!==F.op ) return false;
+    if(F.es  && o.es!==F.es ) return false;
+    if(F.tc  && o.tc!==F.tc ) return false;
+    if(!F.kw.includes(o.kb)) return false;
+    if(q && !(o.n.toLowerCase().includes(q)||o.cm.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+/* FU agregado: pondera por tiempo, no promedia porcentajes */
+function agg(list){
+  let mo=0,md=0,mf=0,mn=0,h=0,ini=0;
+  list.forEach(o=>{mo+=o.m[1];md+=o.m[0];mf+=o.m[2];mn+=o.m[3];h+=o.h;ini+=o.ini;});
+  const tot=mo+md+mf+mn;
+  return {n:list.length, fu: (mo+md)>0?100*mo/(mo+md):0, h, ini,
+          pfdl: tot>0?100*mf/tot:0, pnd: tot>0?100*mn/tot:0,
+          sitios:new Set(list.map(o=>o.lid)).size,
+          conUso:list.filter(o=>o.m[1]>0).length, mo,md,mf,mn,tot};
+}
+function group(list,key){
+  const g={};
+  list.forEach(o=>{const k=o[key]||'—';(g[k]=g[k]||[]).push(o);});
+  return Object.entries(g).map(([k,v])=>({k, ...agg(v)}));
+}
+
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id);
+function fillSel(id,vals,label){
+  const s=$(id); s.innerHTML='<option value="">'+label+'</option>'+
+    vals.sort((a,b)=>a.localeCompare(b,'es')).map(v=>`<option>${v}</option>`).join('');
+}
+const uniq=k=>[...new Set(D.conectores.map(o=>o[k]).filter(Boolean))];
+
+function init(){
+calcular();
+fillSel('fReg',uniq('rg'),'Todas las regiones');
+fillSel('fCom',uniq('cm'),'Todas las comunas');
+fillSel('fOp', uniq('op'),'Todos los operadores');
+fillSel('fEs', uniq('es'),'Todos los estándares');
+fillSel('fTc', uniq('tc'),'AC y DC');
+
+const UD={op:'Excluye los conectores que estuvieron fuera de línea o no disponibles durante toda la ventana, sin ningún cambio.',
+          mov:'Solo conectores que registraron al menos un cambio de estado.',
+          all:'Incluye todo, también los que nunca reportaron.'};
+
+$('hVentana').textContent = D.meta.inicio.slice(11)+'–'+D.meta.fin.slice(11)+' · '+D.meta.inicio.slice(0,10);
+$('hCiclos').textContent  = D.meta.n_ciclos+' ciclos · cada '+D.meta.intervalo_min+' min · '+D.meta.horas+' h';
+['nc1','nc2','nc3','mCiclos'].forEach(i=>{const e=$(i);if(e)e.textContent=NC;});
+$('nc2').textContent = D.conectores.length.toLocaleString('es-CL');
+$('mVentana').innerHTML = `La ventana analizada va del <b>${D.meta.inicio}</b> al <b>${D.meta.fin}</b>, `+
+  `con <b>${NC}</b> observaciones de <b>${D.conectores.length.toLocaleString('es-CL')}</b> conectores, `+
+  `equivalentes a <b>${D.meta.horas} horas</b> continuas.`;
+$('slider').max = NC-1;
+}
+
+/* ---------- mapa ---------- */
+const map=L.map('map',{zoomControl:true}).setView([-33.45,-70.66],5);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  {attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(map);
+const layer=L.layerGroup().addTo(map);
+let CUR=-1;   // -1 = periodo completo
+
+function fuColor(fu){
+  if(fu===null) return '#5f7d9c';
+  if(fu>=50) return '#ff4d6d';
+  if(fu>=25) return '#f2a63b';
+  if(fu>=10) return '#4fb0e8';
+  if(fu>0)   return '#2d7dad';
+  return '#3fb950';
+}
+function drawMap(list){
+  layer.clearLayers();
+  const sitios={};
+  list.forEach(o=>{ if(o.la===null)return;
+    (sitios[o.lid]=sitios[o.lid]||{n:o.n,cm:o.cm,rg:o.rg,op:o.op,la:o.la,lo:o.lo,cs:[]}).cs.push(o); });
+  Object.values(sitios).forEach(s=>{
+    const a=agg(s.cs);
+    let col,txt;
+    if(CUR<0){ col=fuColor(a.fu); txt=`FU ${a.fu.toFixed(1)}%`; }
+    else{ const cnt=[0,0,0,0]; s.cs.forEach(o=>cnt[+o.s[CUR]]++);
+      const mx=cnt.indexOf(Math.max(...cnt)); col=COL[mx];
+      txt=EST[mx]+` · ${cnt[1]} cargando de ${s.cs.length}`; }
+    L.circleMarker([s.la,s.lo],{
+      radius:Math.min(4+Math.sqrt(s.cs.length)*2.1,15),
+      color:col,weight:1.4,fillColor:col,fillOpacity:.62
+    }).bindPopup(
+      `<b>${s.n}</b><br><span style="color:#8fa8c2">${s.cm} · ${s.rg}</span><br>`+
+      `<span style="color:#8fa8c2">Operador:</span> ${s.op}<br>`+
+      `<span style="color:#8fa8c2">Conectores:</span> ${s.cs.length}<br>`+
+      `<span style="color:#8fa8c2">Factor de utilización:</span> <b>${a.fu.toFixed(1)}%</b><br>`+
+      `<span style="color:#8fa8c2">Horas cargando:</span> ${a.h.toFixed(2)}<br>`+
+      `<span style="color:#8fa8c2">Tiempo fuera de línea:</span> ${a.pfdl.toFixed(0)}%<br>`+
+      `<span style="color:#8fa8c2">Cargas iniciadas:</span> ${a.ini}<br>`+
+      `<span style="color:#5f7d9c">${txt}</span>`).addTo(layer);
+  });
+}
+function drawLegend(){
+  $('lg').innerHTML = CUR<0
+    ? `<div style="color:#8fa8c2;margin-bottom:3px">Factor de utilización</div>
+       <div><span class="dot" style="background:#3fb950"></span>0% · sin uso observado</div>
+       <div><span class="dot" style="background:#2d7dad"></span>0–10%</div>
+       <div><span class="dot" style="background:#4fb0e8"></span>10–25%</div>
+       <div><span class="dot" style="background:#f2a63b"></span>25–50%</div>
+       <div><span class="dot" style="background:#ff4d6d"></span>50% o más</div>
+       <div><span class="dot" style="background:#5f7d9c"></span>sin dato informativo</div>`
+    : `<div style="color:#8fa8c2;margin-bottom:3px">Estado dominante del sitio</div>`+
+      EST.map((e,i)=>`<div><span class="dot" style="background:${COL[i]}"></span>${e}</div>`).join('');
+}
+
+/* ---------- gráficos ---------- */
+Chart.defaults.color=c('--dim'); Chart.defaults.borderColor='rgba(34,64,94,.45)';
+Chart.defaults.font.family='Inter, sans-serif'; Chart.defaults.font.size=11;
+Chart.defaults.plugins.legend.labels.boxWidth=11;
+Chart.defaults.plugins.legend.labels.boxHeight=11;
+Chart.defaults.maintainAspectRatio=false;
+const CH={};
+function chart(id,cfg){ if(CH[id])CH[id].destroy(); CH[id]=new Chart($(id),cfg); }
+const pct={ticks:{callback:v=>v+'%'}};
+
+function serieEstados(list){
+  const out=[[],[],[],[]];
+  for(let i=0;i<NC;i++){const cnt=[0,0,0,0];list.forEach(o=>cnt[+o.s[i]]++);
+    for(let k=0;k<4;k++)out[k].push(cnt[k]);}
+  return out;
+}
+function serieFU(list){
+  const out=[];
+  for(let i=0;i<NC;i++){let d=0,o1=0;list.forEach(o=>{if(o.s[i]==='0')d++;else if(o.s[i]==='1')o1++;});
+    out.push(d+o1>0?100*o1/(d+o1):null);}
+  return out;
+}
+function tbl(id,cols,rows,onclick){
+  const t=$(id);
+  t.innerHTML='<thead><tr>'+cols.map((x,i)=>`<th data-i="${i}">${x.h}</th>`).join('')+
+    '</tr></thead><tbody>'+rows.map((r,ri)=>'<tr data-r="'+ri+'">'+
+      cols.map(x=>`<td class="${x.n?'num':''}">${x.f(r)}</td>`).join('')+'</tr>').join('')+'</tbody>';
+  t.querySelectorAll('th').forEach(th=>th.onclick=()=>{
+    const i=+th.dataset.i, k=cols[i].k;
+    rows.sort((a,b)=>{const x=a[k],y=b[k];
+      return typeof x==='number'?(y-x):String(x).localeCompare(String(y),'es');});
+    tbl(id,cols,rows,onclick);
+  });
+  if(onclick) t.querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>onclick(rows[+tr.dataset.r]));
+}
+
+/* ---------- render ---------- */
+function render(){
+  const L2=sel(), A=agg(L2);
+  $('sCon').textContent=A.n.toLocaleString('es-CL');
+  $('sSit').textContent=A.sitios.toLocaleString('es-CL');
+  $('sFU').textContent=A.fu.toFixed(1)+'%';
+  $('sHrs').textContent=A.h.toFixed(0);
+  $('sFdl').textContent=A.pfdl.toFixed(0)+'%';
+  $('sUso').textContent=A.conUso.toLocaleString('es-CL');
+  $('uniDesc').textContent=UD[F.uni];
+  [0,1,2,3].forEach(b=>$('nkw'+b).textContent=D.conectores.filter(o=>o.kb===b).length);
+
+  drawMap(L2); drawLegend();
+
+  /* --- parque (siempre sobre el total, no sobre la selección) --- */
+  const all=D.conectores;
+  const clases=['ACTIVO','SIEMPRE FUERA DE LINEA','SIEMPRE NO DISPONIBLE','SIEMPRE DISPONIBLE','SIEMPRE OCUPADO'];
+  const cCnt=clases.map(k=>all.filter(o=>o.cls===k).length);
+  chart('cParque',{type:'doughnut',
+    data:{labels:['Con cambios de estado','Siempre fuera de línea','Siempre no disponible',
+                  'Siempre disponible (sin uso)','Siempre ocupado'],
+      datasets:[{data:cCnt,backgroundColor:['#4fb0e8','#ff4d6d','#f2a63b','#3fb950','#F03D85'],
+        borderColor:c('--panel'),borderWidth:2}]},
+    options:{cutout:'56%',plugins:{legend:{position:'right'},tooltip:{callbacks:{
+      label:x=>` ${x.label}: ${x.raw.toLocaleString('es-CL')} (${(100*x.raw/all.length).toFixed(1)}%)`}}}}});
+
+  const At=agg(all);
+  chart('cTiempo',{type:'doughnut',
+    data:{labels:EST,datasets:[{data:[At.md,At.mo,At.mf,At.mn],backgroundColor:COL,
+      borderColor:c('--panel'),borderWidth:2}]},
+    options:{cutout:'56%',plugins:{legend:{position:'right'},tooltip:{callbacks:{
+      label:x=>` ${x.label}: ${(x.raw/60).toFixed(0)} h-conector (${(100*x.raw/At.tot).toFixed(1)}%)`}}}}});
+
+  const opsI=group(all,'op').sort((a,b)=>b.n-a.n);
+  const inm=k=>opsI.map(o=>all.filter(x=>x.op===o.k&&x.cls===k).length);
+  chart('cInmOp',{type:'bar',
+    data:{labels:opsI.map(o=>o.k),datasets:[
+      {label:'Con cambios',data:inm('ACTIVO'),backgroundColor:'#4fb0e8'},
+      {label:'Siempre fuera de línea',data:inm('SIEMPRE FUERA DE LINEA'),backgroundColor:'#ff4d6d'},
+      {label:'Siempre no disponible',data:inm('SIEMPRE NO DISPONIBLE'),backgroundColor:'#f2a63b'},
+      {label:'Siempre disponible',data:inm('SIEMPRE DISPONIBLE'),backgroundColor:'#3fb950'},
+      {label:'Siempre ocupado',data:inm('SIEMPRE OCUPADO'),backgroundColor:'#F03D85'}]},
+    options:{indexAxis:'y',scales:{x:{stacked:true},y:{stacked:true}},
+      plugins:{legend:{position:'bottom'}}}});
+
+  const rowsP=opsI.map(o=>{const t=all.filter(x=>x.op===o.k);
+    const no=t.filter(x=>x.noop).length;
+    return {k:o.k,n:t.length,noop:no,pnoop:100*no/t.length,
+            act:t.filter(x=>x.mov).length,
+            sdisp:t.filter(x=>x.cls==='SIEMPRE DISPONIBLE').length};});
+  tbl('tParque',[
+    {h:'Operador',k:'k',f:r=>r.k},
+    {h:'Conectores',k:'n',n:1,f:r=>r.n.toLocaleString('es-CL')},
+    {h:'Con cambios',k:'act',n:1,f:r=>r.act},
+    {h:'Inmóvil no operativo',k:'noop',n:1,f:r=>r.noop},
+    {h:'% inmóvil no operativo',k:'pnoop',n:1,f:r=>r.pnoop.toFixed(1)+'%'},
+    {h:'Siempre disponible',k:'sdisp',n:1,f:r=>r.sdisp}],rowsP);
+
+  /* --- evolución --- */
+  const se=serieEstados(L2);
+  chart('cSerie',{type:'line',
+    data:{labels:D.ts,datasets:EST.map((e,i)=>({label:e,data:se[i],borderColor:COL[i],
+      backgroundColor:COL[i]+'33',fill:true,tension:.25,pointRadius:0,borderWidth:1.6}))},
+    options:{scales:{y:{stacked:true,title:{display:true,text:'conectores'}},
+      x:{ticks:{maxTicksLimit:16}}},interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom'}}}});
+
+  chart('cFUt',{type:'line',
+    data:{labels:D.ts,datasets:[{label:'Factor de utilización',data:serieFU(L2),
+      borderColor:'#4fb0e8',backgroundColor:'#4fb0e833',fill:true,tension:.3,
+      pointRadius:0,borderWidth:2}]},
+    options:{scales:{y:{...pct,beginAtZero:true},x:{ticks:{maxTicksLimit:16}}},
+      plugins:{legend:{display:false}}}});
+
+  const PAL=['#4fb0e8','#F03D85','#3fb950','#f2a63b','#ff4d6d','#a78bfa'];
+  const mkMulti=(id,key)=>{
+    const top=group(L2,key).sort((a,b)=>b.n-a.n).slice(0,6);
+    chart(id,{type:'line',
+      data:{labels:D.ts,datasets:top.map((g,i)=>({label:g.k,
+        data:serieFU(L2.filter(o=>o[key]===g.k)),borderColor:PAL[i],
+        tension:.3,pointRadius:0,borderWidth:1.8,spanGaps:true}))},
+      options:{scales:{y:{...pct,beginAtZero:true},x:{ticks:{maxTicksLimit:12}}},
+        plugins:{legend:{position:'bottom'}}}});
+  };
+  mkMulti('cRegT','rg'); mkMulti('cOpT','op');
+
+  const ini=[],fin=[];
+  for(let i=0;i<NC;i++){ if(i===0){ini.push(0);fin.push(0);continue;}
+    let a=0,b=0; L2.forEach(o=>{if(o.s[i-1]==='0'&&o.s[i]==='1')a++;
+      if(o.s[i-1]==='1'&&o.s[i]==='0')b++;}); ini.push(a); fin.push(-b);}
+  chart('cFlujo',{type:'bar',
+    data:{labels:D.ts,datasets:[
+      {label:'Cargas iniciadas',data:ini,backgroundColor:'#4fb0e8'},
+      {label:'Cargas terminadas',data:fin,backgroundColor:'#ff4d6d'}]},
+    options:{scales:{y:{title:{display:true,text:'conectores'},
+      ticks:{callback:v=>Math.abs(v)}},x:{ticks:{maxTicksLimit:16}}},
+      plugins:{legend:{position:'bottom'},tooltip:{callbacks:{
+        label:x=>` ${x.dataset.label}: ${Math.abs(x.raw)}`}}}}});
+
+  /* --- territorio --- */
+  const regs=group(L2,'rg').filter(r=>r.n>=5).sort((a,b)=>b.fu-a.fu);
+  chart('cReg',{type:'bar',
+    data:{labels:regs.map(r=>r.k),datasets:[{label:'FU',data:regs.map(r=>r.fu),
+      backgroundColor:'#4fb0e8'}]},
+    options:{indexAxis:'y',scales:{x:pct},plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:x=>` FU ${x.raw.toFixed(1)}% · ${regs[x.dataIndex].n} conectores`}}}}});
+
+  const coms=group(L2,'cm').filter(r=>r.n>=3).sort((a,b)=>b.fu-a.fu).slice(0,20);
+  chart('cCom',{type:'bar',
+    data:{labels:coms.map(r=>r.k),datasets:[{label:'FU',data:coms.map(r=>r.fu),
+      backgroundColor:'#F03D85'}]},
+    options:{indexAxis:'y',scales:{x:pct},plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:x=>` FU ${x.raw.toFixed(1)}% · ${coms[x.dataIndex].n} conectores`}}}}});
+
+  const colsTerr=[
+    {h:'Nombre',k:'k',f:r=>r.k},
+    {h:'Conectores',k:'n',n:1,f:r=>r.n},
+    {h:'Sitios',k:'sitios',n:1,f:r=>r.sitios},
+    {h:'FU',k:'fu',n:1,f:r=>r.fu.toFixed(1)+'%'},
+    {h:'',k:'fu',f:r=>`<div class="bar"><i style="width:${Math.min(r.fu,100)}%"></i></div>`},
+    {h:'Horas cargando',k:'h',n:1,f:r=>r.h.toFixed(1)},
+    {h:'Cargas iniciadas',k:'ini',n:1,f:r=>r.ini},
+    {h:'% fuera de línea',k:'pfdl',n:1,f:r=>r.pfdl.toFixed(0)+'%'},
+    {h:'Con uso',k:'conUso',n:1,f:r=>r.conUso}];
+  tbl('tCom',colsTerr,group(L2,'cm').sort((a,b)=>b.h-a.h));
+  tbl('tReg',colsTerr,group(L2,'rg').sort((a,b)=>b.h-a.h));
+
+  /* --- operadores --- */
+  const ops=group(L2,'op').sort((a,b)=>b.fu-a.fu);
+  chart('cOpFU',{type:'bar',
+    data:{labels:ops.map(o=>o.k),datasets:[{data:ops.map(o=>o.fu),backgroundColor:'#4fb0e8'}]},
+    options:{indexAxis:'y',scales:{x:pct},plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:x=>` FU ${x.raw.toFixed(1)}% · ${ops[x.dataIndex].n} conectores`}}}}});
+
+  const opsN=group(L2,'op').sort((a,b)=>b.n-a.n);
+  chart('cOpEst',{type:'bar',
+    data:{labels:opsN.map(o=>o.k),datasets:[
+      {label:'Disponible',data:opsN.map(o=>100*o.md/o.tot),backgroundColor:COL[0]},
+      {label:'Ocupado',data:opsN.map(o=>100*o.mo/o.tot),backgroundColor:COL[1]},
+      {label:'Fuera de línea',data:opsN.map(o=>100*o.mf/o.tot),backgroundColor:COL[2]},
+      {label:'No disponible',data:opsN.map(o=>100*o.mn/o.tot),backgroundColor:COL[3]}]},
+    options:{indexAxis:'y',scales:{x:{stacked:true,...pct,max:100},y:{stacked:true}},
+      plugins:{legend:{position:'bottom'},tooltip:{callbacks:{
+        label:x=>` ${x.dataset.label}: ${x.raw.toFixed(1)}%`}}}}});
+
+  const ess=group(L2,'es').sort((a,b)=>b.fu-a.fu);
+  chart('cEs',{type:'bar',
+    data:{labels:ess.map(o=>o.k),datasets:[{data:ess.map(o=>o.fu),backgroundColor:'#3fb950'}]},
+    options:{indexAxis:'y',scales:{x:pct},plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:x=>` FU ${x.raw.toFixed(1)}% · ${ess[x.dataIndex].n} conectores`}}}}});
+
+  const KWL=['Lento <22 kW','Semirrápido 22–49','Rápido 50–149','Ultrarrápido ≥150'];
+  const kws=[0,1,2,3].map(b=>({k:KWL[b],...agg(L2.filter(o=>o.kb===b))}));
+  chart('cKw',{type:'bar',
+    data:{labels:KWL,datasets:[{data:kws.map(o=>o.fu),
+      backgroundColor:['#3fb950','#f2a63b','#4fb0e8','#F03D85']}]},
+    options:{scales:{y:pct},plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:x=>` FU ${x.raw.toFixed(1)}% · ${kws[x.dataIndex].n} conectores`}}}}});
+
+  const colsOp=[
+    {h:'Nombre',k:'k',f:r=>r.k},
+    {h:'Conectores',k:'n',n:1,f:r=>r.n},
+    {h:'Sitios',k:'sitios',n:1,f:r=>r.sitios},
+    {h:'FU',k:'fu',n:1,f:r=>r.fu.toFixed(1)+'%'},
+    {h:'',k:'fu',f:r=>`<div class="bar"><i style="width:${Math.min(r.fu,100)}%"></i></div>`},
+    {h:'Horas cargando',k:'h',n:1,f:r=>r.h.toFixed(1)},
+    {h:'% del total de horas',k:'h',n:1,f:r=>(100*r.h/(A.h||1)).toFixed(1)+'%'},
+    {h:'Cargas iniciadas',k:'ini',n:1,f:r=>r.ini},
+    {h:'% fuera de línea',k:'pfdl',n:1,f:r=>r.pfdl.toFixed(0)+'%'},
+    {h:'% no disponible',k:'pnd',n:1,f:r=>r.pnd.toFixed(0)+'%'}];
+  tbl('tOp',colsOp,ops.slice());
+  tbl('tEs',colsOp,ess.slice());
+
+  /* --- conectores --- */
+  const rows=L2.slice().sort((a,b)=>b.h-a.h);
+  tbl('tCon',[
+    {h:'Sitio',k:'n',f:r=>r.n},
+    {h:'Comuna',k:'cm',f:r=>r.cm},
+    {h:'Región',k:'rg',f:r=>r.rg},
+    {h:'Operador',k:'op',f:r=>r.op},
+    {h:'Estándar',k:'es',f:r=>r.es},
+    {h:'kW',k:'kw',n:1,f:r=>r.kw},
+    {h:'FU',k:'fu',n:1,f:r=>r.fu===null?'—':r.fu.toFixed(1)+'%'},
+    {h:'FU bruto',k:'fub',n:1,f:r=>r.fub.toFixed(1)+'%'},
+    {h:'Horas cargando',k:'h',n:1,f:r=>r.h.toFixed(2)},
+    {h:'Cargas',k:'ini',n:1,f:r=>r.ini},
+    {h:'Reparto del tiempo',k:'fu',f:r=>{
+      const p=r.m.map(x=>100*x/r.tot);
+      return `<div style="display:flex;height:7px;border-radius:3px;overflow:hidden;min-width:88px">`+
+        p.map((v,i)=>`<i style="width:${v}%;background:${COL[i]}"></i>`).join('')+`</div>`;}},
+    {h:'Clase',k:'cls',f:r=>{
+      const cc={'ACTIVO':'#4fb0e8','SIEMPRE FUERA DE LINEA':'#ff4d6d',
+        'SIEMPRE NO DISPONIBLE':'#f2a63b','SIEMPRE DISPONIBLE':'#3fb950','SIEMPRE OCUPADO':'#F03D85'}[r.cls];
+      return `<span class="pill" style="background:${cc}22;color:${cc}">${r.cls}</span>`;}}
+  ],rows,r=>{ if(r.la!==null){ document.querySelector('nav button[data-t=mapa]').click();
+      map.setView([r.la,r.lo],15); } });
+}
+
+/* ---------- eventos ---------- */
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.pane').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); $('p-'+b.dataset.t).classList.add('on');
+  if(b.dataset.t==='mapa') setTimeout(()=>map.invalidateSize(),60);
+  if(b.dataset.t==='live' && lmap) setTimeout(()=>lmap.invalidateSize(),60);
+});
+$('fUni').onchange=e=>{F.uni=e.target.value;render();};
+$('fReg').onchange=e=>{F.reg=e.target.value;render();};
+$('fCom').onchange=e=>{F.com=e.target.value;render();};
+$('fOp').onchange =e=>{F.op =e.target.value;render();};
+$('fEs').onchange =e=>{F.es =e.target.value;render();};
+$('fTc').onchange =e=>{F.tc =e.target.value;render();};
+document.querySelectorAll('.fkw').forEach(k=>k.onchange=()=>{
+  F.kw=[...document.querySelectorAll('.fkw:checked')].map(x=>+x.value);render();});
+let qt; $('q').oninput=e=>{clearTimeout(qt);qt=setTimeout(()=>{F.q=e.target.value;render();},220);};
+$('reset').onclick=()=>{
+  F.uni='op';F.reg=F.com=F.op=F.es=F.tc=F.q='';F.kw=[0,1,2,3];
+  ['fUni','fReg','fCom','fOp','fEs','fTc','q'].forEach(i=>$(i).value=i==='fUni'?'op':'');
+  document.querySelectorAll('.fkw').forEach(k=>k.checked=true);
+  CUR=-1;$('slider').value=-1;render();};
+$('zoom').onclick=()=>{
+  const pts=sel().filter(o=>o.la!==null).map(o=>[o.la,o.lo]);
+  if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[35,35]});};
+
+$('slider').oninput=e=>{
+  CUR=+e.target.value;
+  $('tLbl').textContent = CUR<0?'Periodo completo':D.ts[CUR];
+  $('tMode').textContent = CUR<0?'Color = factor de utilización del período'
+                                :'Color = estado dominante del sitio en ese instante';
+  drawMap(sel()); drawLegend();
+};
+let timer=null;
+$('play').onclick=()=>{
+  if(timer){clearInterval(timer);timer=null;$('play').innerHTML='&#9654;';return;}
+  $('play').innerHTML='&#10074;&#10074;';
+  if(CUR<0)CUR=0;
+  timer=setInterval(()=>{
+    CUR++; if(CUR>=NC){CUR=0;}
+    $('slider').value=CUR; $('slider').dispatchEvent(new Event('input'));
+  },420);
+};
+/* ---------- panel en vivo ---------- */
+let LV=null, lmap=null, llayer=null;
+async function cargarLive(){
+  try{
+    const r=await fetch(LIVE_URL+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    LV=await r.json(); pintarLive();
+  }catch(e){ $('lEdad').innerHTML='<span style="color:#ff4d6d">sin datos en vivo</span>'; }
+}
+function pintarLive(){
+  if(!LV) return;
+  const e=LV.estados;
+  $('lTot').textContent=LV.total.toLocaleString('es-CL');
+  $('lOcu').textContent=(e['OCUPADO']||0).toLocaleString('es-CL');
+  $('lDis').textContent=(e['DISPONIBLE']||0).toLocaleString('es-CL');
+  $('lFdl').textContent=(e['FUERA DE LINEA']||0).toLocaleString('es-CL');
+  $('lNd').textContent =(e['NO DISPONIBLE']||0).toLocaleString('es-CL');
+  $('lFu').textContent =(LV.fu!=null?LV.fu.toFixed(1):'—')+'%';
+  $('lTs').textContent =LV.ts;
+  const min=Math.round((Date.now()-new Date(LV.ts.replace(' ','T')+'-04:00'))/60000);
+  $('lEdad').innerHTML = min<12
+    ? `hace ${min} min`
+    : `<span style="color:#f2a63b">hace ${min} min · el cron de GitHub se retrasa</span>`;
+  $('pulso').style.background = min<12 ? '#3fb950' : '#f2a63b';
+
+  if(!lmap){
+    lmap=L.map('liveMap').setView([-33.45,-70.66],5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      {attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(lmap);
+    llayer=L.layerGroup().addTo(lmap);
+  }
+  llayer.clearLayers();
+  (LV.mapa||[]).forEach(s=>{
+    const col = s.o>0 ? '#4fb0e8' : (s.d>0 ? '#3fb950' : '#ff4d6d');
+    L.circleMarker([s.la,s.lo],{radius:s.o>0?5+Math.min(s.o,6):3.5,color:col,
+      weight:1.3,fillColor:col,fillOpacity:s.o>0?.85:.35})
+     .bindPopup(`<b>${s.n}</b><br><span style="color:#8fa8c2">${s.cm} · ${s.op}</span><br>`+
+       `Cargando: <b>${s.o}</b> de ${s.t}<br>Disponibles: ${s.d}`).addTo(llayer);
+  });
+  setTimeout(()=>lmap.invalidateSize(),80);
+
+  chart('lPie',{type:'doughnut',data:{labels:EST,
+    datasets:[{data:EST.map(k=>e[k]||0),backgroundColor:COL,
+      borderColor:c('--panel'),borderWidth:2}]},
+    options:{cutout:'58%',plugins:{legend:{position:'right'}}}});
+
+  const mk=(id,arr,lbl)=>{
+    const t=(arr||[]).slice(0,10);
+    chart(id,{type:'bar',data:{labels:t.map(x=>x.k),datasets:[
+      {label:'Cargando',data:t.map(x=>x.ocupado),backgroundColor:'#4fb0e8'},
+      {label:'Disponibles',data:t.map(x=>x.disponible),backgroundColor:'#3fb950'},
+      {label:'Fuera de línea',data:t.map(x=>x.fuera),backgroundColor:'#ff4d6d'}]},
+      options:{indexAxis:'y',scales:{x:{stacked:true},y:{stacked:true}},
+        plugins:{legend:{position:'bottom'}}}});
+  };
+  mk('lOp',LV.por_operador); mk('lReg',LV.por_region);
+
+  tbl('lTab',[{h:'Sitio',k:'n',f:r=>r.n},{h:'Comuna',k:'cm',f:r=>r.cm},
+    {h:'Operador',k:'op',f:r=>r.op},
+    {h:'Cargando',k:'ocup',n:1,f:r=>r.ocup},
+    {h:'Conectores',k:'tot',n:1,f:r=>r.tot}],(LV.cargando||[]).slice());
+}
+$('lRefresh').onclick=cargarLive;
+setInterval(cargarLive, 120000);   // refresca cada 2 minutos
+
+// arranque
+cargarLive();
+cargar().then(()=>{
+  init();
+  render();
+  setTimeout(()=>map.invalidateSize(),200);
+});
+</script>
+</body>
+</html>
