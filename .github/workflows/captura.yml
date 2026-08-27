@@ -15,6 +15,8 @@ concurrency:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   capturar:
@@ -52,3 +54,26 @@ jobs:
             sleep 5
           done
           exit 1
+
+  # GitHub Pages NO se republica solo con el push de arriba: hay que disparar
+  # un despliegue explicito. Sin esto, el sitio publicado queda congelado en
+  # el ultimo "Run workflow" manual aunque el repositorio se siga actualizando
+  # cada 5 minutos. Al colgar este job del mismo workflow que ya corre cada 5
+  # min, el sitio queda al dia sin intervencion manual.
+  desplegar:
+    needs: capturar
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4

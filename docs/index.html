@@ -335,6 +335,15 @@ tbody tr:hover{background:var(--panel2)}
       <div class="cap">Transiciones detectadas entre ciclos consecutivos. Disponible→Ocupado es un inicio de carga;
         Ocupado→Disponible es un término.</div>
       <div class="cwrap"><canvas id="cFlujo"></canvas></div></div>
+    <div class="card wide"><h3>Conectores siempre fuera de línea o no disponibles, por día</h3>
+      <div class="cap">Para cada día calendario del rango seleccionado, cuenta los conectores que
+        reportaron <b>FUERA DE LÍNEA</b> o <b>NO DISPONIBLE</b> en el 100% de las capturas de ese
+        día, sin un solo ciclo distinto. Es la versión día a día del indicador de "caídos
+        permanentes" que se ve en <b>Estado del parque</b> para toda la ventana junta: permite ver
+        si el número de equipos muertos crece, se mantiene o se recupera con el tiempo. Los días
+        en el borde del rango (el primero y el último) pueden verse inflados: tuvieron menos
+        capturas para demostrar que cambiaron de estado.</div>
+      <div class="cwrap tall"><canvas id="cInactDia"></canvas></div></div>
   </div>
 </div></section>
 
@@ -370,6 +379,14 @@ tbody tr:hover{background:var(--panel2)}
     <div class="card"><h3>Factor de utilización por potencia</h3>
       <div class="cap">Cuatro tramos de potencia nominal del conector.</div>
       <div class="cwrap"><canvas id="cKw"></canvas></div></div>
+    <div class="card"><h3>Distribución de precios de la energía</h3>
+      <div class="cap">Conectores de la selección según su tarifa declarada, en $/kWh. Los
+        conectores sin precio declarado no se incluyen.</div>
+      <div class="cwrap"><canvas id="cPrecioHist"></canvas></div></div>
+    <div class="card"><h3>Precio promedio por operador</h3>
+      <div class="cap">Tarifa media de energía declarada, en $/kWh, entre los conectores del
+        operador que informan precio.</div>
+      <div class="cwrap"><canvas id="cPrecioOp"></canvas></div></div>
     <div class="card wide"><h3>Detalle por operador</h3>
       <div class="tw"><table id="tOp"></table></div></div>
     <div class="card wide"><h3>Detalle por estándar de conector</h3>
@@ -658,6 +675,12 @@ const esPrueba = n => { const s=String(n||'').toLowerCase();
   return OPC_PRUEBA.some(p=>s.includes(p)); };
 const EST = ['DISPONIBLE','OCUPADO','FUERA DE LINEA','NO DISPONIBLE'];
 const COL = ['#3fb950','#4fb0e8','#ff4d6d','#f2a63b'];
+// '9' = el conector todavia no existia (o ya no) en esa epoca del historico.
+// Distinto de fuera de linea: ahi no hay dato, no un estado real observado.
+const SIN_DATO = '9';
+const ESTX = [...EST, 'SIN DATOS'];
+const COLX = [...COL, '#3b4f66'];
+const estIdx = s => s===SIN_DATO ? 4 : +s;
 const CSS = getComputedStyle(document.documentElement);
 const c = n => CSS.getPropertyValue(n).trim();
 
@@ -697,9 +720,12 @@ function calcular(){
 
   D.conectores.forEach(o=>{
     o.sw = o.s.slice(I0, I1+1);
-    const m=[0,0,0,0];
-    for(let i=0;i<NC;i++) m[+o.sw[i]] += W[i];
-    o.m=m; o.tot=m[0]+m[1]+m[2]+m[3]; o.inf=m[0]+m[1];
+    // SIN_DATO ('9') marca un conector que todavia no existia (o ya no) en
+    // esa epoca del historico: no cuenta en m, tot ni inf, a diferencia de
+    // fuera de linea/no disponible, que si son datos reales.
+    const m=[0,0,0,0]; let sd=0;
+    for(let i=0;i<NC;i++){ const d=+o.sw[i]; if(d<4) m[d]+=W[i]; else sd+=W[i]; }
+    o.m=m; o.sd=sd; o.tot=m[0]+m[1]+m[2]+m[3]; o.inf=m[0]+m[1];
     o.fu  = o.inf>0 ? 100*m[1]/o.inf : null;
     o.fub = o.tot>0 ? 100*m[1]/o.tot : 0;
     o.pfdl= o.tot>0 ? 100*m[2]/o.tot : 0;
@@ -708,8 +734,14 @@ function calcular(){
     o.kb  = kwBucket(o.kw);
     let mv=false; for(let i=1;i<NC;i++) if(o.sw[i]!==o.sw[0]){mv=true;break;}
     o.mov=mv;
-    o.cls = mv ? 'ACTIVO' : ('SIEMPRE '+EST[+o.sw[0]]);
-    o.noop= !mv && (o.sw[0]==='2'||o.sw[0]==='3');
+    // Si nunca cambio y lo unico que hay es SIN_DATO, el conector
+    // simplemente no existia todavia en todo este rango: no es "inmovil" en
+    // ningun estado real, asi que se separa para no mezclarlo con los
+    // caidos permanentes.
+    o.sinDatos = !mv && o.sw[0]===SIN_DATO;
+    o.cls = o.sinDatos ? 'SIN DATOS EN EL PERIODO'
+          : mv ? 'ACTIVO' : ('SIEMPRE '+EST[+o.sw[0]]);
+    o.noop= o.sinDatos || (!mv && (o.sw[0]==='2'||o.sw[0]==='3'));
     o.ini=0; o.fin=0;
     for(let i=1;i<NC;i++){
       if(o.sw[i-1]==='0'&&o.sw[i]==='1') o.ini++;
@@ -879,9 +911,11 @@ function drawMap(list){
     const tier=Math.max(...s.cs.map(o=>o.kb));
     let col,txt;
     if(CUR<0){ col=fuColor(a.fu); txt=`FU ${a.fu.toFixed(1)}%`; }
-    else{ const cnt=[0,0,0,0]; s.cs.forEach(o=>cnt[+o.sw[CUR]]++);
-      const mx=cnt.indexOf(Math.max(...cnt)); col=COL[mx];
-      txt=EST[mx]+` · ${cnt[1]} cargando de ${s.cs.length}`; }
+    else{ const cnt=[0,0,0,0]; let conDato=0;
+      s.cs.forEach(o=>{ const d=+o.sw[CUR]; if(d<4){cnt[d]++; conDato++;} });
+      if(!conDato){ col='#3b4f66'; txt='Sin datos en este instante'; }
+      else{ const mx=cnt.indexOf(Math.max(...cnt)); col=COL[mx];
+        txt=EST[mx]+` · ${cnt[1]} cargando de ${conDato}`; } }
 
     const esc=Math.min(1+Math.sqrt(s.cs.length)*0.16,1.9);
     const R=[7,8,11][tier]*esc, L=R*2+5;
@@ -964,6 +998,59 @@ function serieFU(list){
   for(let i=0;i<NC;i++){let d=0,o1=0;list.forEach(o=>{if(o.sw[i]==='0')d++;else if(o.sw[i]==='1')o1++;});
     out.push(d+o1>0?100*o1/(d+o1):null);}
   return out;
+}
+/* Agrupa los indices de la ventana actual por dia calendario (hora de Chile,
+   viene incluida en el propio texto del timestamp) y cuenta, por dia, cuantos
+   conectores estuvieron el 100% de las capturas de ese dia en FUERA DE LINEA
+   o en NO DISPONIBLE. Es el mismo criterio de "inmovil" que usa el resto del
+   dashboard, pero recalculado dia a dia en vez de sobre toda la ventana. */
+function porDiaInactivos(list){
+  const porDia={};
+  for(let i=0;i<NC;i++){
+    const d=TSFW[i].slice(0,10);
+    (porDia[d]=porDia[d]||[]).push(i);
+  }
+  const dias=Object.keys(porDia).sort();
+  return dias.map(d=>{
+    const idxs=porDia[d];
+    let fuera=0, nd=0;
+    list.forEach(o=>{
+      let todoFuera=true, todoND=true;
+      for(const i of idxs){
+        const s=o.sw[i];
+        if(s!=='2') todoFuera=false;
+        if(s!=='3') todoND=false;
+        if(!todoFuera && !todoND) break;
+      }
+      if(todoFuera) fuera++;
+      if(todoND) nd++;
+    });
+    return {dia:d, n:idxs.length, fuera, nd, tot:fuera+nd};
+  });
+}
+/* Reparte los precios declarados ($/kWh) de la seleccion en tramos parejos,
+   redondeados a un multiplo de 10 para que el eje se lea bien. */
+function bucketsPrecio(list){
+  const ps=list.map(o=>o.pr).filter(p=>p!=null && p>0);
+  if(!ps.length) return {labels:[],counts:[],n:0};
+  const min=Math.min(...ps), max=Math.max(...ps);
+  const step=Math.max(10, Math.ceil((max-min)/10/10)*10);
+  const start=Math.floor(min/step)*step;
+  const nb=Math.floor((max-start)/step)+1;
+  const counts=new Array(nb).fill(0);
+  ps.forEach(p=>{ counts[Math.min(nb-1,Math.floor((p-start)/step))]++; });
+  const labels=counts.map((_,i)=>'$'+(start+i*step)+'–'+(start+(i+1)*step));
+  return {labels, counts, n:ps.length};
+}
+/* Precio medio de energia por operador, solo entre conectores que declaran
+   precio (muchos no lo hacen). */
+function precioPorOperador(list){
+  const g={};
+  list.forEach(o=>{ if(o.pr==null||o.pr<=0) return;
+    (g[o.op]=g[o.op]||[]).push(o.pr); });
+  return Object.entries(g).map(([k,v])=>
+    ({k, n:v.length, prom:v.reduce((a,b)=>a+b,0)/v.length}))
+    .sort((a,b)=>b.prom-a.prom);
 }
 function tbl(id,cols,rows,onclick){
   const t=$(id);
@@ -1101,6 +1188,18 @@ function render(){
       plugins:{legend:{position:'bottom'},tooltip:{callbacks:{
         label:x=>` ${x.dataset.label}: ${Math.abs(x.raw)}`}}}}});
 
+  const diaInact=porDiaInactivos(L2);
+  chart('cInactDia',{type:'bar',
+    data:{labels:diaInact.map(d=>d.dia.slice(8,10)+'-'+d.dia.slice(5,7)),
+      datasets:[
+        {label:'Siempre fuera de línea',data:diaInact.map(d=>d.fuera),backgroundColor:COL[2]},
+        {label:'Siempre no disponible',data:diaInact.map(d=>d.nd),backgroundColor:COL[3]}]},
+    options:{scales:{x:{stacked:true},y:{stacked:true,title:{display:true,text:'conectores'}}},
+      plugins:{legend:{position:'bottom'},tooltip:{callbacks:{
+        footer:items=>{const d=diaInact[items[0].dataIndex];
+          return `Total inactivo: ${d.tot} de ${L2.length} (${(100*d.tot/(L2.length||1)).toFixed(1)}%) · `+
+                 `${d.n} capturas ese día`;}}}}}});
+
   /* --- territorio --- */
   const regs=group(L2,'rg').filter(r=>r.n>=5).sort((a,b)=>b.fu-a.fu);
   chart('cReg',{type:'bar',
@@ -1160,6 +1259,20 @@ function render(){
       tooltip:{callbacks:{label:x=>` FU ${x.raw.toFixed(1)}% · `+
         `${kws[x.dataIndex].n} conectores · ${kws[x.dataIndex].h.toFixed(1)} h cargando`}}}}});
 
+  const bp=bucketsPrecio(L2);
+  chart('cPrecioHist',{type:'bar',
+    data:{labels:bp.labels,datasets:[{data:bp.counts,backgroundColor:'#4fb0e8'}]},
+    options:{scales:{y:{title:{display:true,text:'conectores'}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{
+        label:x=>` ${x.raw} conectores (${(100*x.raw/(bp.n||1)).toFixed(1)}%)`}}}}});
+
+  const pop=precioPorOperador(L2);
+  chart('cPrecioOp',{type:'bar',
+    data:{labels:pop.map(o=>o.k),datasets:[{data:pop.map(o=>o.prom),backgroundColor:'#F03D85'}]},
+    options:{indexAxis:'y',scales:{x:{title:{display:true,text:'$/kWh'}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{
+        label:x=>` $${x.raw.toFixed(0)}/kWh · ${pop[x.dataIndex].n} conectores`}}}}});
+
   const colsOp=[
     {h:'Nombre',k:'k',f:r=>r.k},
     {h:'Conectores',k:'n',n:1,f:r=>r.n},
@@ -1213,7 +1326,7 @@ function episodios(o){
   while(i<NC){
     let j=i; while(j+1<NC && o.sw[j+1]===o.sw[i]) j++;
     let min=0; for(let k=i;k<=j;k++) min+=W[k];
-    ep.push({e:+o.sw[i], i, j, n:j-i+1, min,
+    ep.push({e:estIdx(o.sw[i]), i, j, n:j-i+1, min,
              t0:TSFW[i], t1:TSFW[j], borde:(i===0||j===NC-1)});
     i=j+1;
   }
@@ -1230,7 +1343,7 @@ function pintarTimeline(o){
   let x=0;
   for(let i=0;i<NC;i++){
     const w=Math.max(anc*W[i]/TOTMIN, 0.6);
-    ctx.fillStyle=COL[+o.sw[i]];
+    ctx.fillStyle=COLX[estIdx(o.sw[i])];
     ctx.fillRect(x,0,Math.ceil(w+0.5),alt);
     x+=w;
   }
@@ -1239,8 +1352,8 @@ function pintarTimeline(o){
     const frac=(ev.clientX-r.left)/r.width;
     let acc=0, idx=0;
     for(let i=0;i<NC;i++){ acc+=W[i]/TOTMIN; if(frac<=acc){idx=i;break;} idx=i; }
-    $('cxTLlbl').innerHTML=`${TSFW[idx]} · <b style="color:${COL[+o.sw[idx]]}">`+
-      `${EST[+o.sw[idx]]}</b>`;
+    $('cxTLlbl').innerHTML=`${TSFW[idx]} · <b style="color:${COLX[estIdx(o.sw[idx])]}">`+
+      `${ESTX[estIdx(o.sw[idx])]}</b>`;
   };
   cv.onmouseleave=()=>{$('cxTLlbl').textContent='';};
   $('cxLeg').innerHTML=EST.map((e,i)=>
@@ -1295,8 +1408,8 @@ function abrirFicha(id){
   tbl('cxEp',[
     {h:'Desde',k:'t0',f:r=>r.t0},
     {h:'Hasta',k:'t1',f:r=>r.t1},
-    {h:'Estado',k:'e',f:r=>`<span class="pill" style="background:${COL[r.e]}22;`+
-      `color:${COL[r.e]}">${EST[r.e]}</span>`},
+    {h:'Estado',k:'e',f:r=>`<span class="pill" style="background:${COLX[r.e]}22;`+
+      `color:${COLX[r.e]}">${ESTX[r.e]}</span>`},
     {h:'Capturas',k:'n',n:1,f:r=>r.n},
     {h:'Duración',k:'min',n:1,f:r=>r.min<90?r.min.toFixed(0)+' min':(r.min/60).toFixed(1)+' h'},
     {h:'',k:'borde',f:r=>r.borde?'<span class="pill" style="background:#f2a63b22;color:#f2a63b">borde</span>':''}

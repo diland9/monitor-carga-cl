@@ -98,6 +98,46 @@ def cargar_serie(dias=None):
     return df
 
 
+P_HISTORIAL = RAIZ / "estado" / "historial_ids.json"
+SIN_DATO = "9"  # conector que todavia no existia (o ya no) en esa epoca
+
+
+def cargar_historial():
+    """Cada entrada es {"desde": ts, "ids": [...]}: el orden de conectores
+    vigente desde ese instante hasta el siguiente cambio registrado. Lo
+    mantiene al dia captura.py cada vez que cambia el parque."""
+    if not P_HISTORIAL.exists():
+        return []
+    return sorted(json.loads(P_HISTORIAL.read_text()), key=lambda e: e["desde"])
+
+
+def reindexar_a(ids_actual, historial, filas):
+    """Realinea (ts, estados) al orden de ids_actual usando connector_id en
+    vez de posicion. Los conectores que no existian en la epoca de una fila
+    quedan en SIN_DATO. Una fila cuyo largo no calza ni con su propia epoca
+    (dato corrupto) se descarta."""
+    epocas = list(historial)
+    if not epocas or epocas[-1]["ids"] != ids_actual:
+        epocas.append({"desde": "0000-00-00 00:00:00", "ids": ids_actual})
+    mapas = {}
+
+    def mapa(i):
+        if i not in mapas:
+            pos = {cid: p for p, cid in enumerate(epocas[i]["ids"])}
+            mapas[i] = ([pos.get(cid) for cid in ids_actual], len(epocas[i]["ids"]))
+        return mapas[i]
+
+    out, ei = [], 0
+    for ts, est in filas:
+        while ei + 1 < len(epocas) and epocas[ei + 1]["desde"] <= ts:
+            ei += 1
+        m, n = mapa(ei)
+        if len(est) != n:
+            continue
+        out.append((ts, "".join(SIN_DATO if p is None else est[p] for p in m)))
+    return out
+
+
 def pesos(ts):
     """Minutos que representa cada captura, por la regla del trapecio.
 
@@ -134,13 +174,22 @@ def main():
     ids = json.loads((RAIZ / "estado" / "orden.json").read_text())
     N = len(ids)
 
-    # Descarta capturas cuyo largo no calza con el orden vigente. Ocurre en la
-    # captura inmediatamente anterior a un alta o baja de conectores.
-    largos = ser["estados"].str.len()
-    malas = int((largos != N).sum())
+    # Realinea cada captura al orden vigente HOY por connector_id, en vez de
+    # descartar de plano las que se tomaron bajo un parque de otro tamano.
+    # Antes de esto, cualquier alta o baja de conectores volvia incomparable
+    # por posicion TODO el historico anterior al cambio, y se perdia entero:
+    # el string de estados solo tiene sentido bajo el orden con que se
+    # capturo. Los conectores que no existian todavia en la epoca de una
+    # fila quedan en SIN_DATO ('9'), que el dashboard excluye de los
+    # promedios en vez de tratarlo como fuera de linea.
+    tss = [t.strftime("%Y-%m-%d %H:%M:%S") for t in ser["ts"]]
+    filas = list(zip(tss, ser["estados"].tolist()))
+    filas_ok = reindexar_a(ids, cargar_historial(), filas)
+    malas = len(filas) - len(filas_ok)
     if malas:
-        print(f"  {malas} capturas con largo distinto al parque actual, se omiten")
-        ser = ser[largos == N].reset_index(drop=True)
+        print(f"  {malas} capturas no calzan ni con su propia epoca, se omiten")
+    ser = pd.DataFrame(filas_ok, columns=["ts", "estados"])
+    ser["ts"] = pd.to_datetime(ser["ts"])
 
     w = pesos(ser["ts"])
     g = ser["ts"].diff().dt.total_seconds().div(60).to_numpy()[1:]
@@ -191,9 +240,12 @@ def main():
         mo += float(w[a == 1].sum())
         md += float(w[a == 0].sum())
         mf += float(w[a == 2].sum())
-        if len(set(s)) == 1:
+        # Ignora el relleno SIN_DATO al juzgar si un conector es inmovil: no
+        # existir todavia no es lo mismo que estar congelado en un estado.
+        reales = set(s) - {SIN_DATO}
+        if len(reales) == 1:
             n_inm += 1
-            inmoviles[NOMBRE[int(s[0])]] += 1
+            inmoviles[NOMBRE[int(next(iter(reales)))]] += 1
 
     resumen = {
         "generado": data["meta"]["generado"],

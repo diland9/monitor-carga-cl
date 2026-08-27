@@ -196,6 +196,56 @@ def escribir_meta(df, ids, destino):
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
 
 
+P_HISTORIAL = RAIZ / "estado" / "historial_ids.json"
+SIN_DATO = "9"  # conector que todavia no existia (o ya no) en esa epoca
+
+
+def cargar_historial():
+    """Cada entrada es {"desde": ts, "ids": [...]}: el orden de conectores
+    vigente desde ese instante hasta el siguiente cambio registrado."""
+    if not P_HISTORIAL.exists():
+        return []
+    return sorted(json.loads(P_HISTORIAL.read_text()), key=lambda e: e["desde"])
+
+
+def registrar_epoca(ids, ts):
+    """Deja constancia de un cambio de parque, para que mas adelante se
+    puedan realinear por connector_id las capturas tomadas bajo este orden
+    con las de cualquier otro momento. Sin este registro, un alta o baja de
+    conectores vuelve incomparable por posicion todo lo capturado antes."""
+    hist = cargar_historial()
+    hist.append({"desde": ts, "ids": ids})
+    P_HISTORIAL.write_text(json.dumps(hist, ensure_ascii=False, separators=(",", ":")))
+
+
+def reindexar_a(ids_actual, historial, filas):
+    """Realinea (ts, estados) al orden de ids_actual usando connector_id en
+    vez de posicion. Los conectores que no existian en la epoca de una fila
+    quedan en SIN_DATO. Necesario porque el string de estados solo tiene
+    sentido bajo el orden vigente cuando se tomo esa captura; una fila cuyo
+    largo no calza ni con su propia epoca (dato corrupto) se descarta."""
+    epocas = list(historial)
+    if not epocas or epocas[-1]["ids"] != ids_actual:
+        epocas.append({"desde": "0000-00-00 00:00:00", "ids": ids_actual})
+    mapas = {}
+
+    def mapa(i):
+        if i not in mapas:
+            pos = {cid: p for p, cid in enumerate(epocas[i]["ids"])}
+            mapas[i] = ([pos.get(cid) for cid in ids_actual], len(epocas[i]["ids"]))
+        return mapas[i]
+
+    out, ei = [], 0
+    for ts, est in filas:
+        while ei + 1 < len(epocas) and epocas[ei + 1]["desde"] <= ts:
+            ei += 1
+        m, n = mapa(ei)
+        if len(est) != n:
+            continue
+        out.append((ts, "".join(SIN_DATO if p is None else est[p] for p in m)))
+    return out
+
+
 def escribir_hoy(carpeta_dia, ids, destino):
     """Serie del dia en curso, reconstruida desde los .txt de la jornada.
 
@@ -209,9 +259,11 @@ def escribir_hoy(carpeta_dia, ids, destino):
             ts, est = p.read_text().strip().split("\n")[:2]
         except ValueError:
             continue
-        if len(est) == len(ids):        # descarta capturas de un parque distinto
-            filas.append((ts, est))
+        filas.append((ts, est))
     filas.sort()
+    # Reindexa por si el parque cambio en medio del dia: sin esto, las horas
+    # anteriores al cambio desaparecian de "hoy" hasta la consolidacion.
+    filas = reindexar_a(ids, cargar_historial(), filas)
     payload = {"ts": [t for t, _ in filas], "caps": [e for _, e in filas]}
     with gzip.open(destino, "wt", encoding="utf-8", compresslevel=9) as f:
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
@@ -243,6 +295,7 @@ def main():
     previo = json.loads(p_orden.read_text()) if p_orden.exists() else None
     if previo != ids:
         p_orden.write_text(json.dumps(ids, separators=(",", ":")))
+        registrar_epoca(ids, ts)
         if previo is None:
             print(f"orden.json creado con {len(ids)} conectores")
         else:
