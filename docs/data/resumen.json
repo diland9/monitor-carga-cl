@@ -1,8 +1,8 @@
 {
- "generado": "2026-08-31 18:09",
- "ventana": "2026-08-22 00:30 a 2026-08-31 18:05",
- "horas": 233.57,
- "capturas": 2687,
+ "generado": "2026-08-31 18:12",
+ "ventana": "2026-08-22 00:30 a 2026-08-31 18:10",
+ "horas": 233.66,
+ "capturas": 2688,
  "conectores": 2265,
  "inmoviles": 1317,
  "inmoviles_detalle": {
@@ -12,6 +12,6 @@
   "NO DISPONIBLE": 400
  },
  "fu_global": 12.31,
- "horas_cargando": 24580.7,
+ "horas_cargando": 24587.6,
  "pct_fuera_linea": 41.83
 }
