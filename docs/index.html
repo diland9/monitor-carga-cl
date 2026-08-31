@@ -78,6 +78,8 @@ button.act:hover{border-color:var(--accent);color:var(--accent)}
 .legend{position:absolute;bottom:64px;right:14px;background:rgba(17,31,48,.94);
   border:1px solid var(--line);border-radius:5px;padding:9px 11px;font-size:11px;z-index:600;line-height:1.9}
 .legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
+#liveWrap.mapa-full{position:fixed!important;inset:0;z-index:2000;background:var(--ink);padding:12px}
+#liveWrap.mapa-full #liveMap{height:100%!important}
 .timebar{display:flex;align-items:center;gap:12px;padding:9px 16px;background:var(--panel);
   border-top:1px solid var(--line);flex:0 0 auto}
 .timebar button{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
@@ -161,6 +163,7 @@ tbody tr:hover{background:var(--panel2)}
   <button data-t="evo">Evolución temporal</button>
   <button data-t="terr">Comunas y regiones</button>
   <button data-t="oper">Operadores</button>
+  <button data-t="precios">Precios</button>
   <button data-t="conn">Conectores</button>
   <button data-t="cnx">Ficha de conector</button>
   <button data-t="metodo">Metodología</button>
@@ -242,11 +245,15 @@ tbody tr:hover{background:var(--panel2)}
       <button class="act" style="width:auto;padding:5px 12px;margin-left:auto" id="lRefresh">Actualizar</button>
     </div>
     <div class="charts">
-      <div class="card"><h3>Dónde se está cargando ahora</h3>
-        <div class="cap">Sitios con al menos un conector ocupado en este instante.</div>
-        <div style="position:relative">
+      <div class="card wide">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap">
+          <div><h3>Dónde se está cargando ahora</h3>
+            <div class="cap">Sitios con al menos un conector ocupado en este instante.</div></div>
+          <button class="act" id="liveExpand" style="width:auto;padding:6px 12px;white-space:nowrap">⛶ Ampliar</button>
+        </div>
+        <div style="position:relative" id="liveWrap">
           <div class="legend" id="lgLive" style="position:absolute;top:10px;left:10px;bottom:auto;right:auto;z-index:610"></div>
-          <div id="liveMap" style="height:400px;border-radius:5px"></div>
+          <div id="liveMap" style="height:520px;border-radius:5px"></div>
         </div></div>
       <div class="card"><h3>Estado de la red</h3>
         <div class="cap">Reparto instantáneo de los conectores declarados.</div>
@@ -319,8 +326,15 @@ tbody tr:hover{background:var(--panel2)}
     sesión más corta que el intervalo puede caer entre dos observaciones y no verse.
   </div>
   <div class="charts">
-    <div class="card wide"><h3>Estado de la red minuto a minuto</h3>
-      <div class="cap">Conteo de conectores en cada estado, en cada uno de los <span id="nc3"></span> ciclos.</div>
+    <div class="card wide">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <h3>Estado de la red minuto a minuto</h3>
+        <button class="act" id="cSerieReset" style="width:auto;padding:5px 10px;font-size:11.5px">↺ Restablecer zoom</button>
+      </div>
+      <div class="cap">Conteo de conectores en cada estado, en cada uno de los <span id="nc3"></span> ciclos.
+        Usa la rueda del mouse o pellizca para hacer zoom en el tiempo, y arrastra para moverte. Las
+        franjas más claras marcan los días pares, para separarlos a simple vista. Los filtros de
+        región, comuna y operador del panel izquierdo también aplican aquí.</div>
       <div class="cwrap tall"><canvas id="cSerie"></canvas></div></div>
     <div class="card wide"><h3>Factor de utilización a lo largo de la tarde y noche</h3>
       <div class="cap">Ocupados sobre el total de conectores que reportan (ocupados + disponibles), en cada instante.</div>
@@ -388,23 +402,45 @@ tbody tr:hover{background:var(--panel2)}
     <div class="card"><h3>Factor de utilización por potencia</h3>
       <div class="cap">Cuatro tramos de potencia nominal del conector.</div>
       <div class="cwrap"><canvas id="cKw"></canvas></div></div>
-    <div class="card"><h3>Distribución de precios de la energía</h3>
-      <div class="cap">Conectores de la selección según su tarifa declarada, en $/kWh. Los
-        conectores sin precio declarado no se incluyen.</div>
-      <div class="cwrap"><canvas id="cPrecioHist"></canvas></div></div>
-    <div class="card"><h3>Precio promedio por operador</h3>
-      <div class="cap">Tarifa media de energía declarada, en $/kWh, entre los conectores del
-        operador que informan precio.</div>
-      <div class="cwrap"><canvas id="cPrecioOp"></canvas></div></div>
-    <div class="card wide"><h3>Distribución de precios por operador</h3>
-      <div class="cap">Cada burbuja es un precio ($/kWh) que cobra ese operador; el tamaño es
-        la cantidad de conectores con esa tarifa exacta. Muestra la dispersión de precios dentro
-        de cada operador, no solo el promedio.</div>
-      <div class="cwrap tall"><canvas id="cPrecioBub"></canvas></div></div>
     <div class="card wide"><h3>Detalle por operador</h3>
       <div class="tw"><table id="tOp"></table></div></div>
     <div class="card wide"><h3>Detalle por estándar de conector</h3>
       <div class="tw"><table id="tEs"></table></div></div>
+  </div>
+</div></section>
+
+<!-- PRECIOS -->
+<section class="pane" id="p-precios"><div class="scroll">
+  <div class="warn">
+    <b>AC y DC por separado.</b> Los conectores lentos (AC, Tipo 1/Tipo 2) y los rápidos
+    (DC, CCS 2/CHAdeMO/GB/T) tienen estructuras de precio muy distintas: comparar sus tarifas
+    juntas mezcla dos mercados diferentes. Cada gráfica de esta pestaña se repite para AC y para DC.
+    El promedio que se muestra es <b>ponderado por conector</b>: un operador con 50 conectores al
+    mismo precio pesa 50 veces más que uno con 1, no se promedian las tarifas "por operador" sin
+    más.
+  </div>
+  <div class="charts">
+    <div class="card"><h3>⚡ AC · Distribución de precios</h3>
+      <div class="cap">Conectores de corriente alterna según su tarifa declarada, en $/kWh.</div>
+      <div class="cwrap"><canvas id="cPrecioHistAC"></canvas></div></div>
+    <div class="card"><h3>⚡ AC · Precio promedio ponderado por operador</h3>
+      <div class="cap">Tarifa media de energía, en $/kWh, entre los conectores AC del operador que informan precio.</div>
+      <div class="cwrap"><canvas id="cPrecioOpAC"></canvas></div></div>
+    <div class="card wide"><h3>⚡ AC · Distribución de precios por operador</h3>
+      <div class="cap">Cada color es un operador; cada burbuja, un precio ($/kWh) que cobra. El tamaño de la
+        burbuja es la cantidad de conectores con esa tarifa exacta. El promedio ponderado de cada
+        operador está en su nombre, en la leyenda.</div>
+      <div class="cwrap tall"><canvas id="cPrecioBubAC"></canvas></div></div>
+    <div class="card"><h3>🔌 DC · Distribución de precios</h3>
+      <div class="cap">Conectores de corriente continua (carga rápida/ultrarrápida) según su tarifa declarada.</div>
+      <div class="cwrap"><canvas id="cPrecioHistDC"></canvas></div></div>
+    <div class="card"><h3>🔌 DC · Precio promedio ponderado por operador</h3>
+      <div class="cap">Tarifa media de energía, en $/kWh, entre los conectores DC del operador que informan precio.</div>
+      <div class="cwrap"><canvas id="cPrecioOpDC"></canvas></div></div>
+    <div class="card wide"><h3>🔌 DC · Distribución de precios por operador</h3>
+      <div class="cap">Cada color es un operador; cada burbuja, un precio ($/kWh) que cobra. El tamaño de la
+        burbuja es la cantidad de conectores con esa tarifa exacta.</div>
+      <div class="cwrap tall"><canvas id="cPrecioBubDC"></canvas></div></div>
   </div>
 </div></section>
 
@@ -566,6 +602,8 @@ tbody tr:hover{background:var(--panel2)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
 <script>
 // Rutas relativas: GitHub Pages sirve la carpeta docs/ como raiz del sitio.
 const META_URL = "data/meta.json.gz";        // metadatos fijos, 1 vez al dia
@@ -607,7 +645,7 @@ function avisoSinHistorico(msg){
     'El histórico se genera con el workflow <code>Consolidar y publicar</code> '+
     'y necesita al menos unas cuantas capturas acumuladas. '+
     'La pestaña <b>En vivo</b> funciona igual.</div>';
-  ['mapa','parque','evo','terr','oper','conn'].forEach(t=>{
+  ['mapa','parque','evo','terr','oper','precios','conn'].forEach(t=>{
     const p = document.getElementById('p-'+t);
     if(p) p.innerHTML = txt;
   });
@@ -1007,6 +1045,33 @@ Chart.defaults.font.family='Inter, sans-serif'; Chart.defaults.font.size=11;
 Chart.defaults.plugins.legend.labels.boxWidth=11;
 Chart.defaults.plugins.legend.labels.boxHeight=11;
 Chart.defaults.maintainAspectRatio=false;
+if(window.ChartZoom) Chart.register(window.ChartZoom);
+/* Plugin propio: sombrea los dias pares del rango con una franja muy suave,
+   para separar visualmente un dia del siguiente en series largas. Se activa
+   pasando plugins:{diaShade:{dias:[...]}} con un dia (AAAA-MM-DD) por punto. */
+Chart.register({
+  id:'diaShade',
+  beforeDraw(chart, args, opts){
+    if(!opts || !opts.dias || !opts.dias.length) return;
+    const dias=opts.dias, {ctx, chartArea, scales:{x}}=chart;
+    if(!chartArea) return;
+    const paso = (x.getPixelForValue(1)||0) - (x.getPixelForValue(0)||0);
+    ctx.save();
+    let i0=0;
+    for(let i=1;i<=dias.length;i++){
+      if(i===dias.length || dias[i]!==dias[i0]){
+        const dd=+dias[i0].slice(8,10);
+        if(dd%2===0){
+          const xA=x.getPixelForValue(i0), xB=x.getPixelForValue(i-1)+paso;
+          ctx.fillStyle='rgba(255,255,255,.045)';
+          ctx.fillRect(xA, chartArea.top, xB-xA, chartArea.bottom-chartArea.top);
+        }
+        i0=i;
+      }
+    }
+    ctx.restore();
+  }
+});
 const CH={};
 function chart(id,cfg){ if(CH[id])CH[id].destroy(); CH[id]=new Chart($(id),cfg); }
 const pct={ticks:{callback:v=>v+'%'}};
@@ -1134,6 +1199,49 @@ function burbujasPrecio(list){
     ({x:idx.get(v.op), y:v.pr, r:3+13*Math.sqrt(v.n/maxN), n:v.n, op:v.op}));
   return {ops, data};
 }
+const PALOP=['#4fb0e8','#F03D85','#3fb950','#f2a63b','#ff4d6d','#a78bfa','#8fd3c7','#e8c547','#b48ead','#2d7dad'];
+/* Los tres graficos de precio se repiten para AC y DC por separado: son
+   mercados de tarifas distintos (carga lenta vs. rapida) y mezclarlos en un
+   solo promedio no dice nada util. El promedio por operador ya esta
+   ponderado por conector (no por operador), porque se calcula sobre la
+   lista completa de precios individuales, no sobre un promedio de promedios. */
+function renderPrecios(list){
+  ['AC','DC'].forEach(tc=>{
+    const sub=list.filter(o=>o.tc===tc);
+
+    const bp=bucketsPrecio(sub);
+    chart('cPrecioHist'+tc,{type:'bar',
+      data:{labels:bp.labels,datasets:[{data:bp.counts,
+        backgroundColor: tc==='AC'?'#f2a63b':'#4fb0e8'}]},
+      options:{scales:{y:{title:{display:true,text:'conectores'}}},
+        plugins:{legend:{display:false},tooltip:{callbacks:{
+          label:x=>` ${x.raw} conectores (${(100*x.raw/(bp.n||1)).toFixed(1)}%)`}}}}});
+
+    const pop=precioPorOperador(sub);
+    chart('cPrecioOp'+tc,{type:'bar',
+      data:{labels:pop.map(o=>o.k),datasets:[{data:pop.map(o=>o.prom),
+        backgroundColor:pop.map((o,i)=>PALOP[i%PALOP.length])}]},
+      options:{indexAxis:'y',scales:{x:{title:{display:true,text:'$/kWh'}}},
+        plugins:{legend:{display:false},tooltip:{callbacks:{
+          label:x=>` $${x.raw.toFixed(0)}/kWh · ${pop[x.dataIndex].n} conectores`}}}}});
+
+    const bb=burbujasPrecio(sub);
+    const datasets=bb.ops.map((op,i)=>{
+      const col=PALOP[i%PALOP.length];
+      const prom=pop.find(p=>p.k===op);
+      return {label:`${op} · prom. ponderado $${prom?prom.prom.toFixed(0):'—'}/kWh`,
+        data:bb.data.filter(d=>d.op===op), backgroundColor:col+'99', borderColor:col};
+    });
+    chart('cPrecioBub'+tc,{type:'bubble',
+      data:{datasets},
+      options:{scales:{
+          x:{min:-0.6,max:bb.ops.length-0.4,ticks:{stepSize:1,autoSkip:false,
+            maxRotation:60,minRotation:30,callback:v=>bb.ops[v]||''}},
+          y:{title:{display:true,text:'$/kWh'}}},
+        plugins:{legend:{position:'bottom'},tooltip:{callbacks:{
+          label:x=>` ${x.raw.op}: $${x.raw.y}/kWh · ${x.raw.n} conector${x.raw.n>1?'es':''}`}}}}});
+  });
+}
 function tbl(id,cols,rows,onclick){
   const t=$(id);
   t.innerHTML='<thead><tr>'+cols.map((x,i)=>`<th data-i="${i}">${x.h}</th>`).join('')+
@@ -1258,7 +1366,11 @@ function render(){
       backgroundColor:COL[i]+'33',fill:true,tension:.25,pointRadius:0,borderWidth:1.6}))},
     options:{scales:{y:{stacked:true,title:{display:true,text:'conectores'}},
       x:{ticks:{maxTicksLimit:16}}},interaction:{mode:'index',intersect:false},
-      plugins:{legend:{position:'bottom'}}}});
+      plugins:{legend:{position:'bottom'},
+        diaShade:{dias:TSFW.map(t=>t.slice(0,10))},
+        zoom:{pan:{enabled:true,mode:'x'},
+          zoom:{wheel:{enabled:true},pinch:{enabled:true},mode:'x'},
+          limits:{x:{minRange:10}}}}}});
 
   // FU con detalle (ocupados/reportando) para tooltips con unidades, no solo %.
   const fuTot=serieFUdet(L2);
@@ -1397,29 +1509,7 @@ function render(){
       tooltip:{callbacks:{label:x=>` FU ${x.raw.toFixed(1)}% · `+
         `${kws[x.dataIndex].n} conectores · ${kws[x.dataIndex].h.toFixed(1)} h cargando`}}}}});
 
-  const bp=bucketsPrecio(L2);
-  chart('cPrecioHist',{type:'bar',
-    data:{labels:bp.labels,datasets:[{data:bp.counts,backgroundColor:'#4fb0e8'}]},
-    options:{scales:{y:{title:{display:true,text:'conectores'}}},
-      plugins:{legend:{display:false},tooltip:{callbacks:{
-        label:x=>` ${x.raw} conectores (${(100*x.raw/(bp.n||1)).toFixed(1)}%)`}}}}});
-
-  const pop=precioPorOperador(L2);
-  chart('cPrecioOp',{type:'bar',
-    data:{labels:pop.map(o=>o.k),datasets:[{data:pop.map(o=>o.prom),backgroundColor:'#F03D85'}]},
-    options:{indexAxis:'y',scales:{x:{title:{display:true,text:'$/kWh'}}},
-      plugins:{legend:{display:false},tooltip:{callbacks:{
-        label:x=>` $${x.raw.toFixed(0)}/kWh · ${pop[x.dataIndex].n} conectores`}}}}});
-
-  const bb=burbujasPrecio(L2);
-  chart('cPrecioBub',{type:'bubble',
-    data:{datasets:[{data:bb.data,backgroundColor:'#4fb0e888',borderColor:'#4fb0e8'}]},
-    options:{scales:{
-        x:{min:-0.6,max:bb.ops.length-0.4,ticks:{stepSize:1,autoSkip:false,
-          maxRotation:60,minRotation:30,callback:v=>bb.ops[v]||''}},
-        y:{title:{display:true,text:'$/kWh'}}},
-      plugins:{legend:{display:false},tooltip:{callbacks:{
-        label:x=>` ${x.raw.op}: $${x.raw.y}/kWh · ${x.raw.n} conector${x.raw.n>1?'es':''}`}}}}});
+  renderPrecios(L2);
 
   const colsOp=[
     {h:'Nombre',k:'k',f:r=>r.k},
@@ -1812,7 +1902,10 @@ function pintarLive(){
   $('pulso').style.background = min<12 ? '#3fb950' : '#f2a63b';
 
   if(!lmap){
-    lmap=L.map('liveMap').setView([-33.45,-70.66],5);
+    // Zoom control abajo a la izquierda: arriba a la izquierda vive la
+    // leyenda, y ambos se tapaban.
+    lmap=L.map('liveMap',{zoomControl:false}).setView([-33.45,-70.66],5);
+    L.control.zoom({position:'bottomleft'}).addTo(lmap);
     const lb=fondos();
     lb['Oscuro (sin distracciones)'].addTo(lmap);
     L.control.layers(lb,null,{position:'topright',collapsed:true}).addTo(lmap);
@@ -1858,6 +1951,15 @@ function pintarLive(){
     {h:'Conectores',k:'tot',n:1,f:r=>r.tot}],(LV.cargando||[]).slice());
 }
 $('lRefresh').onclick=()=>{cargarLive(); refrescarHistorico();};
+$('cSerieReset').onclick=()=>{ if(CH['cSerie'] && CH['cSerie'].resetZoom) CH['cSerie'].resetZoom(); };
+$('liveExpand').onclick=()=>{
+  const w=$('liveWrap'), full=w.classList.toggle('mapa-full');
+  $('liveExpand').textContent = full ? '✕ Cerrar' : '⛶ Ampliar';
+  setTimeout(()=>lmap && lmap.invalidateSize(),260);
+};
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape' && $('liveWrap').classList.contains('mapa-full')) $('liveExpand').click();
+});
 setInterval(cargarLive, REFRESCO_MS);
 
 /* Recarga el dia en curso y vuelve a pintar, conservando los filtros y la
