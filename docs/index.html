@@ -244,7 +244,10 @@ tbody tr:hover{background:var(--panel2)}
     <div class="charts">
       <div class="card"><h3>Dónde se está cargando ahora</h3>
         <div class="cap">Sitios con al menos un conector ocupado en este instante.</div>
-        <div id="liveMap" style="height:400px;border-radius:5px"></div></div>
+        <div style="position:relative">
+          <div class="legend" id="lgLive" style="position:absolute;top:10px;left:10px;bottom:auto;right:auto;z-index:610"></div>
+          <div id="liveMap" style="height:400px;border-radius:5px"></div>
+        </div></div>
       <div class="card"><h3>Estado de la red</h3>
         <div class="cap">Reparto instantáneo de los conectores declarados.</div>
         <div class="cwrap"><canvas id="lPie"></canvas></div></div>
@@ -289,6 +292,7 @@ tbody tr:hover{background:var(--panel2)}
     o está permanentemente bloqueado, o simplemente nadie lo usó. Los tres casos son distintos y
     se separan abajo.
   </div>
+  <div id="wOcup" style="display:none" class="warn"></div>
   <div class="charts">
     <div class="card"><h3>Composición del parque</h3>
       <div class="cap">Los <span id="nc2"></span> conectores según si cambiaron de estado durante la ventana.</div>
@@ -325,8 +329,13 @@ tbody tr:hover{background:var(--panel2)}
       <div class="cap">Las seis regiones con más conectores en la selección.</div>
       <div class="cwrap"><canvas id="cRegT"></canvas></div></div>
     <div class="card"><h3>Utilización por operador en el tiempo</h3>
-      <div class="cap">Los seis operadores con más conectores en la selección.</div>
+      <div class="cap">Los seis operadores con más conectores en la selección. La línea blanca
+        punteada es el total: permite comparar cada operador contra el conjunto.</div>
       <div class="cwrap"><canvas id="cOpT"></canvas></div></div>
+    <div class="card wide"><h3>Factor de utilización por franja horaria, cada día</h3>
+      <div class="cap">🌙 Noche 22–24h · 🌅 Madrugada/mañana 00–12h · ☀️ Tarde 12–18h ·
+        🚦 Hora punta 18–22h. Haz clic en una franja de la leyenda para ocultarla o mostrarla.</div>
+      <div class="cwrap tall"><canvas id="cFranjas"></canvas></div></div>
     <div class="card wide"><h3>Utilización por velocidad de carga a lo largo del tiempo</h3>
       <div class="cap">Lento, rápido y ultrarrápido tienen patrones distintos: las sesiones AC
         lentas duran horas y arrastran ocupación, las DC rápidas rotan.</div>
@@ -387,6 +396,11 @@ tbody tr:hover{background:var(--panel2)}
       <div class="cap">Tarifa media de energía declarada, en $/kWh, entre los conectores del
         operador que informan precio.</div>
       <div class="cwrap"><canvas id="cPrecioOp"></canvas></div></div>
+    <div class="card wide"><h3>Distribución de precios por operador</h3>
+      <div class="cap">Cada burbuja es un precio ($/kWh) que cobra ese operador; el tamaño es
+        la cantidad de conectores con esa tarifa exacta. Muestra la dispersión de precios dentro
+        de cada operador, no solo el promedio.</div>
+      <div class="cwrap tall"><canvas id="cPrecioBub"></canvas></div></div>
     <div class="card wide"><h3>Detalle por operador</h3>
       <div class="tw"><table id="tOp"></table></div></div>
     <div class="card wide"><h3>Detalle por estándar de conector</h3>
@@ -953,8 +967,7 @@ function L2marker(latlng, lado, svgInterior, z){
   })});
 }
 
-function drawLegend(){
-  const forma =
+const FORMA_HTML =
     `<div style="color:#8fa8c2;margin:7px 0 3px">Forma = velocidad</div>`+
     `<div><svg width="12" height="12" viewBox="0 0 12 12" style="vertical-align:-2px">`+
     `<polygon points="6,1 11,10.5 1,10.5" fill="none" stroke="#8fa8c2" stroke-width="1.4"/></svg>`+
@@ -965,6 +978,7 @@ function drawLegend(){
     `<div><svg width="12" height="12" viewBox="0 0 12 12" style="vertical-align:-2px">`+
     `<circle cx="6" cy="6" r="5" fill="none" stroke="#8fa8c2" stroke-width="1.4"/></svg>`+
     `&nbsp;Ultrarrápido · ≥150 kW</div>`;
+function drawLegend(){
   const color = CUR<0
     ? `<div style="color:#8fa8c2;margin-bottom:3px">Color = factor de utilización</div>
        <div><span class="dot" style="background:#3fb950"></span>0% · sin uso observado</div>
@@ -974,7 +988,17 @@ function drawLegend(){
        <div><span class="dot" style="background:#ff4d6d"></span>50% o más</div>`
     : `<div style="color:#8fa8c2;margin-bottom:3px">Color = estado del sitio</div>`+
       EST.map((e,i)=>`<div><span class="dot" style="background:${COL[i]}"></span>${e}</div>`).join('');
-  $('lg').innerHTML = color + forma;
+  $('lg').innerHTML = color + FORMA_HTML;
+}
+/* Leyenda del mapa en vivo: el esquema de color ahi es fijo (no depende de un
+   slider de tiempo como el mapa historico), asi que se dibuja una sola vez. */
+function drawLegendLive(){
+  const color =
+    `<div style="color:#8fa8c2;margin-bottom:3px">Color = estado del sitio</div>`+
+    `<div><span class="dot" style="background:#4fb0e8"></span>Con carga en curso</div>`+
+    `<div><span class="dot" style="background:#3fb950"></span>Disponible, nadie cargando</div>`+
+    `<div><span class="dot" style="background:#ff4d6d"></span>Sin disponibles ahora</div>`;
+  $('lgLive').innerHTML = color + FORMA_HTML;
 }
 
 /* ---------- gráficos ---------- */
@@ -998,6 +1022,15 @@ function serieFU(list){
   for(let i=0;i<NC;i++){let d=0,o1=0;list.forEach(o=>{if(o.sw[i]==='0')d++;else if(o.sw[i]==='1')o1++;});
     out.push(d+o1>0?100*o1/(d+o1):null);}
   return out;
+}
+/* Como serieFU, pero ademas guarda el detalle (ocupados/disponibles/total)
+   de cada instante, para que los tooltips puedan mostrar la relacion real
+   ("12 de 45 reportando") y no solo el porcentaje. */
+function serieFUdet(list){
+  const pctArr=[], det=[];
+  for(let i=0;i<NC;i++){let d=0,o1=0;list.forEach(o=>{if(o.sw[i]==='0')d++;else if(o.sw[i]==='1')o1++;});
+    pctArr.push(d+o1>0?100*o1/(d+o1):null); det.push({o:o1,d,tot:o1+d});}
+  return {pct:pctArr, det};
 }
 /* Agrupa los indices de la ventana actual por dia calendario (hora de Chile,
    viene incluida en el propio texto del timestamp) y cuenta, por dia, cuantos
@@ -1028,6 +1061,40 @@ function porDiaInactivos(list){
     return {dia:d, n:idxs.length, fuera, nd, tot:fuera+nd};
   });
 }
+/* Franjas horarias del dia, tal como las define el observatorio. Cada
+   captura cae en exactamente una franja segun su hora local (Chile). */
+const FRANJAS=[
+  {k:'noche', emoji:'🌙', label:'Noche 22–24h',    ini:22, fin:24, color:'#5b6ee8'},
+  {k:'manana',emoji:'🌅', label:'Madrugada/mañana 00–12h', ini:0,  fin:12, color:'#f2a63b'},
+  {k:'tarde', emoji:'☀️', label:'Tarde 12–18h',    ini:12, fin:18, color:'#4fb0e8'},
+  {k:'punta', emoji:'🚦', label:'Hora punta 18–22h',ini:18, fin:22, color:'#ff4d6d'},
+];
+/* Para cada dia calendario de la ventana, el FU (ocupados/reportando) dentro
+   de cada franja horaria. Permite ver si la punta de uso es de noche, de
+   tarde o en la hora punta clasica, y como cambia dia a dia. */
+function porFranjaDia(list){
+  const porDia={};
+  for(let i=0;i<NC;i++){
+    const d=TSFW[i].slice(0,10), h=+TSFW[i].slice(11,13);
+    const fr=FRANJAS.find(f=>h>=f.ini && h<f.fin);
+    if(!fr) continue;
+    const g=(porDia[d]=porDia[d]||{});
+    (g[fr.k]=g[fr.k]||[]).push(i);
+  }
+  const dias=Object.keys(porDia).sort();
+  return dias.map(d=>{
+    const row={dia:d};
+    FRANJAS.forEach(fr=>{
+      const idxs=(porDia[d]||{})[fr.k]||[];
+      let o1=0, dd=0;
+      idxs.forEach(i=>{ list.forEach(o=>{
+        if(o.sw[i]==='1')o1++; else if(o.sw[i]==='0')dd++; }); });
+      row[fr.k]=(o1+dd)>0 ? 100*o1/(o1+dd) : null;
+      row[fr.k+'_o']=o1; row[fr.k+'_tot']=o1+dd;
+    });
+    return row;
+  });
+}
 /* Reparte los precios declarados ($/kWh) de la seleccion en tramos parejos,
    redondeados a un multiplo de 10 para que el eje se lea bien. */
 function bucketsPrecio(list){
@@ -1052,6 +1119,21 @@ function precioPorOperador(list){
     ({k, n:v.length, prom:v.reduce((a,b)=>a+b,0)/v.length}))
     .sort((a,b)=>b.prom-a.prom);
 }
+/* Una burbuja por cada (operador, precio) distinto; el radio crece con la
+   cantidad de conectores en ese precio exacto. Muestra la dispersion de
+   tarifas dentro de un mismo operador, cosa que el promedio esconde. */
+function burbujasPrecio(list){
+  const porOp={};
+  list.forEach(o=>{ if(o.pr==null||o.pr<=0) return;
+    const key=o.op+'|'+o.pr;
+    (porOp[key]=porOp[key]||{op:o.op,pr:o.pr,n:0}).n++; });
+  const ops=[...new Set(Object.values(porOp).map(v=>v.op))].sort((a,b)=>a.localeCompare(b,'es'));
+  const idx=new Map(ops.map((o,i)=>[o,i]));
+  const maxN=Math.max(1,...Object.values(porOp).map(v=>v.n));
+  const data=Object.values(porOp).map(v=>
+    ({x:idx.get(v.op), y:v.pr, r:3+13*Math.sqrt(v.n/maxN), n:v.n, op:v.op}));
+  return {ops, data};
+}
 function tbl(id,cols,rows,onclick){
   const t=$(id);
   t.innerHTML='<thead><tr>'+cols.map((x,i)=>`<th data-i="${i}">${x.h}</th>`).join('')+
@@ -1069,6 +1151,9 @@ function tbl(id,cols,rows,onclick){
 /* ---------- render ---------- */
 function render(){
   const L2=sel(), A=agg(L2);
+  // Estas etiquetas citan "los N ciclos" del rango elegido: deben seguir al
+  // rango, no quedar congeladas en el valor que tenian al cargar la pagina.
+  ['nc1','nc3'].forEach(i=>{const e=$(i);if(e)e.textContent=NC;});
   $('sCon').textContent=A.n.toLocaleString('es-CL');
   $('sSit').textContent=A.sitios.toLocaleString('es-CL');
   $('sFU').textContent=A.fu.toFixed(1)+'%';
@@ -1100,10 +1185,36 @@ function render(){
   const all=D.conectores;
   const clases=['ACTIVO','SIEMPRE FUERA DE LINEA','SIEMPRE NO DISPONIBLE','SIEMPRE DISPONIBLE','SIEMPRE OCUPADO'];
   const cCnt=clases.map(k=>all.filter(o=>o.cls===k).length);
+
+  // Aviso de calidad de datos: un conector "siempre ocupado" en toda la
+  // ventana (no solo "siempre disponible", que es normal en un cargador
+  // poco usado) es sospechoso de estado trabado en el backend del operador,
+  // sobre todo si la ventana cubre varios dias. No se excluye del analisis:
+  // solo se senala para que se pueda reportar al operador.
+  const siempreOcup = all.filter(o=>o.cls==='SIEMPRE OCUPADO');
+  const wOcup=$('wOcup');
+  if(siempreOcup.length && TOTMIN/60 >= 24){
+    wOcup.style.display='';
+    wOcup.innerHTML = `<b>⚠️ ${siempreOcup.length} conector(es) llevan TODA la ventana `+
+      `(${(TOTMIN/60).toFixed(0)} h) en OCUPADO sin un solo cambio.</b> Con una ventana de `+
+      `más de un día esto casi nunca es una carga real: lo más probable es un estado trabado `+
+      `en el backend del operador. Candidatos: `+
+      siempreOcup.slice(0,10).map(o=>
+        `<span class="pill" style="background:#ffffff22;color:#fff;cursor:pointer" `+
+        `data-cx="${o.id}">#${o.id} ${o.op}</span>`).join(' ')+
+      (siempreOcup.length>10?` y ${siempreOcup.length-10} más`:'')+
+      `. Haz clic en un chip para ver su ficha.`;
+    wOcup.querySelectorAll('[data-cx]').forEach(el=>el.onclick=()=>{
+      document.querySelector('nav button[data-t=cnx]').click();
+      abrirFicha(+el.dataset.cx);
+    });
+  } else {
+    wOcup.style.display='none';
+  }
   chart('cParque',{type:'doughnut',
     data:{labels:['Con cambios de estado','Siempre fuera de línea','Siempre no disponible',
                   'Siempre disponible (sin uso)','Siempre ocupado'],
-      datasets:[{data:cCnt,backgroundColor:['#4fb0e8','#ff4d6d','#f2a63b','#3fb950','#F03D85'],
+      datasets:[{data:cCnt,backgroundColor:['#4fb0e8','#ff4d6d','#f2a63b','#3fb950','#ffffff'],
         borderColor:c('--panel'),borderWidth:2}]},
     options:{cutout:'56%',plugins:{legend:{position:'right'},tooltip:{callbacks:{
       label:x=>` ${x.label}: ${x.raw.toLocaleString('es-CL')} (${(100*x.raw/all.length).toFixed(1)}%)`}}}}});
@@ -1123,7 +1234,7 @@ function render(){
       {label:'Siempre fuera de línea',data:inm('SIEMPRE FUERA DE LINEA'),backgroundColor:'#ff4d6d'},
       {label:'Siempre no disponible',data:inm('SIEMPRE NO DISPONIBLE'),backgroundColor:'#f2a63b'},
       {label:'Siempre disponible',data:inm('SIEMPRE DISPONIBLE'),backgroundColor:'#3fb950'},
-      {label:'Siempre ocupado',data:inm('SIEMPRE OCUPADO'),backgroundColor:'#F03D85'}]},
+      {label:'Siempre ocupado',data:inm('SIEMPRE OCUPADO'),backgroundColor:'#ffffff'}]},
     options:{indexAxis:'y',scales:{x:{stacked:true},y:{stacked:true}},
       plugins:{legend:{position:'bottom'}}}});
 
@@ -1149,31 +1260,58 @@ function render(){
       x:{ticks:{maxTicksLimit:16}}},interaction:{mode:'index',intersect:false},
       plugins:{legend:{position:'bottom'}}}});
 
+  // FU con detalle (ocupados/reportando) para tooltips con unidades, no solo %.
+  const fuTot=serieFUdet(L2);
   chart('cFUt',{type:'line',
-    data:{labels:TSW,datasets:[{label:'Factor de utilización',data:serieFU(L2),
+    data:{labels:TSW,datasets:[{label:'Factor de utilización',data:fuTot.pct,det:fuTot.det,
       borderColor:'#4fb0e8',backgroundColor:'#4fb0e833',fill:true,tension:.3,
       pointRadius:0,borderWidth:2}]},
     options:{scales:{y:{...pct,beginAtZero:true},x:{ticks:{maxTicksLimit:16}}},
-      plugins:{legend:{display:false}}}});
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:x=>{
+        const d=x.dataset.det[x.dataIndex];
+        return ` FU ${x.raw==null?'—':x.raw.toFixed(1)+'%'} · ${d.o} ocupados de `+
+               `${d.tot} reportando (${d.d} disponibles)`;}}}}}});
 
   const PAL=['#4fb0e8','#F03D85','#3fb950','#f2a63b','#ff4d6d','#a78bfa'];
   const mkMulti=(id,key)=>{
     const top=group(L2,key).sort((a,b)=>b.n-a.n).slice(0,6);
+    const total=serieFUdet(L2);
     chart(id,{type:'line',
-      data:{labels:TSW,datasets:top.map((g,i)=>({label:g.k,
-        data:serieFU(L2.filter(o=>o[key]===g.k)),borderColor:PAL[i],
-        tension:.3,pointRadius:0,borderWidth:1.8,spanGaps:true}))},
+      data:{labels:TSW,datasets:[
+        {label:'Total',data:total.pct,det:total.det,borderColor:'#ffffff',
+          borderDash:[6,3],borderWidth:2.6,tension:.3,pointRadius:0,order:0},
+        ...top.map((g,i)=>{const gd=serieFUdet(L2.filter(o=>o[key]===g.k));
+          return {label:g.k,data:gd.pct,det:gd.det,borderColor:PAL[i],
+            tension:.3,pointRadius:0,borderWidth:1.8,spanGaps:true};})]},
       options:{scales:{y:{...pct,beginAtZero:true},x:{ticks:{maxTicksLimit:12}}},
-        plugins:{legend:{position:'bottom'}}}});
+        plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:x=>{
+          const d=x.dataset.det[x.dataIndex];
+          return ` ${x.dataset.label}: ${x.raw==null?'—':x.raw.toFixed(1)+'%'} · `+
+                 `${d.o} de ${d.tot} reportando`;}}}}}});
   };
   mkMulti('cRegT','rg'); mkMulti('cOpT','op');
 
+  const franjas=porFranjaDia(L2);
+  chart('cFranjas',{type:'bar',
+    data:{labels:franjas.map(r=>r.dia.slice(8,10)+'-'+r.dia.slice(5,7)),
+      datasets:FRANJAS.map(fr=>({label:`${fr.emoji} ${fr.label}`,
+        data:franjas.map(r=>r[fr.k]),backgroundColor:fr.color,
+        det:franjas.map(r=>({o:r[fr.k+'_o'],tot:r[fr.k+'_tot']}))}))},
+    options:{scales:{y:{...pct,beginAtZero:true,title:{display:true,text:'FU'}}},
+      plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:x=>{
+        const d=x.dataset.det[x.dataIndex];
+        return ` ${x.dataset.label}: ${x.raw==null?'—':x.raw.toFixed(1)+'%'} · `+
+               `${d.o} de ${d.tot} reportando`;}}}}}});
+
   chart('cKwT',{type:'line',
-    data:{labels:TSW,datasets:[0,1,2].map(b=>({label:KWL[b],
-      data:serieFU(L2.filter(o=>o.kb===b)),borderColor:KWCOR[b],
-      backgroundColor:KWCOR[b]+'22',tension:.3,pointRadius:0,borderWidth:2,spanGaps:true}))},
+    data:{labels:TSW,datasets:[0,1,2].map(b=>{const gd=serieFUdet(L2.filter(o=>o.kb===b));
+      return {label:KWL[b],data:gd.pct,det:gd.det,borderColor:KWCOR[b],
+      backgroundColor:KWCOR[b]+'22',tension:.3,pointRadius:0,borderWidth:2,spanGaps:true};})},
     options:{scales:{y:{...pct,beginAtZero:true},x:{ticks:{maxTicksLimit:14}}},
-      plugins:{legend:{position:'bottom'}}}});
+      plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:x=>{
+        const d=x.dataset.det[x.dataIndex];
+        return ` ${x.dataset.label}: ${x.raw==null?'—':x.raw.toFixed(1)+'%'} · `+
+               `${d.o} de ${d.tot} reportando`;}}}}}});
 
   const ini=[],fin=[];
   for(let i=0;i<NC;i++){ if(i===0){ini.push(0);fin.push(0);continue;}
@@ -1273,6 +1411,16 @@ function render(){
       plugins:{legend:{display:false},tooltip:{callbacks:{
         label:x=>` $${x.raw.toFixed(0)}/kWh · ${pop[x.dataIndex].n} conectores`}}}}});
 
+  const bb=burbujasPrecio(L2);
+  chart('cPrecioBub',{type:'bubble',
+    data:{datasets:[{data:bb.data,backgroundColor:'#4fb0e888',borderColor:'#4fb0e8'}]},
+    options:{scales:{
+        x:{min:-0.6,max:bb.ops.length-0.4,ticks:{stepSize:1,autoSkip:false,
+          maxRotation:60,minRotation:30,callback:v=>bb.ops[v]||''}},
+        y:{title:{display:true,text:'$/kWh'}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{
+        label:x=>` ${x.raw.op}: $${x.raw.y}/kWh · ${x.raw.n} conector${x.raw.n>1?'es':''}`}}}}});
+
   const colsOp=[
     {h:'Nombre',k:'k',f:r=>r.k},
     {h:'Conectores',k:'n',n:1,f:r=>r.n},
@@ -1308,8 +1456,13 @@ function render(){
         p.map((v,i)=>`<i style="width:${v}%;background:${COL[i]}"></i>`).join('')+`</div>`;}},
     {h:'Clase',k:'cls',f:r=>{
       const cc={'ACTIVO':'#4fb0e8','SIEMPRE FUERA DE LINEA':'#ff4d6d',
-        'SIEMPRE NO DISPONIBLE':'#f2a63b','SIEMPRE DISPONIBLE':'#3fb950','SIEMPRE OCUPADO':'#F03D85'}[r.cls];
-      return `<span class="pill" style="background:${cc}22;color:${cc}">${r.cls}</span>`;}}
+        'SIEMPRE NO DISPONIBLE':'#f2a63b','SIEMPRE DISPONIBLE':'#3fb950',
+        'SIEMPRE OCUPADO':'#ffffff'}[r.cls] || '#5f7d9c';
+      // Blanco puro necesita texto oscuro encima: el patron de fondo
+      // translucido + texto del mismo color solo funciona con tonos saturados.
+      const style = cc==='#ffffff' ? 'background:#ffffff;color:#0b1622'
+                                    : `background:${cc}22;color:${cc}`;
+      return `<span class="pill" style="${style}">${r.cls}</span>`;}}
   ],rows,r=>{ document.querySelector('nav button[data-t=cnx]').click(); abrirFicha(r.id); });
 
   poblarSelector();
@@ -1548,6 +1701,92 @@ $('play').onclick=()=>{
 };
 /* ---------- panel en vivo ---------- */
 let LV=null, lmap=null, llayer=null;
+
+/* Popup de sitio para el mapa en vivo. A diferencia del mapa historico (que
+   resume la ventana elegida), este cruza el punto en vivo con la serie
+   completa de D para poder listar los conectores actuales, agruparlos por
+   CARGADOR (evse_uid, no el connector_id) y mostrar su actividad de los
+   ultimos 3 dias. Si D todavia no cargo, cae en el resumen simple de antes. */
+function popupSitioLive(s){
+  const simple = `<b>${s.n}</b><br><span style="color:#8fa8c2">${s.cm} · ${s.op}</span><br>`+
+    `Cargando: <b>${s.o}</b> de ${s.t}<br>Disponibles: ${s.d}`;
+  if(typeof D==='undefined' || !D || !D.conectores || s.lid==null) return simple;
+  const cons = D.conectores.filter(o=>o.lid===s.lid);
+  if(!cons.length) return simple;
+
+  const kwTot = cons.reduce((a,o)=>a+(+o.kw||0),0);
+  const ahora = o => o.s[o.s.length-1];   // estado mas reciente conocido de ESE conector
+
+  // Agrupa por cargador: varios conectores (p.ej. CCS + CHAdeMO) pueden
+  // compartir un mismo pedestal fisico. Si algun conector no trae "ev"
+  // (metadata capturada antes de que el observatorio distinguiera esto),
+  // se lo trata como su propio cargador para no perder informacion.
+  const porCargador={};
+  cons.forEach(o=>{ const k=o.ev!=null?'ev'+o.ev:'c'+o.id;
+    (porCargador[k]=porCargador[k]||[]).push(o); });
+
+  // Actividad de los ultimos 3 dias por cargador, en 24 bloques de 3 h: el
+  // estado mas informativo entre sus conectores en ese bloque (ocupado >
+  // disponible > no disponible > fuera de linea > sin dato).
+  const T=D.tsfull.length;
+  const finMs=new Date(D.tsfull[T-1].replace(' ','T')+'-04:00').getTime();
+  const iniMs=finMs-3*24*3600000;
+  let i0=T; for(let i=0;i<T;i++){ if(new Date(D.tsfull[i].replace(' ','T')+'-04:00').getTime()>=iniMs){i0=i;break;} }
+  const idxs3d=[]; for(let i=i0;i<T;i++) idxs3d.push(i);
+  const NB=24, dur=Math.max(1,idxs3d.length/NB);
+  const PRIOR=['1','0','3','2',SIN_DATO];
+  function franjaCargador(grupo){
+    const bloques=[];
+    for(let b=0;b<NB;b++){
+      const desde=Math.floor(b*dur), hasta=Math.floor((b+1)*dur);
+      let mejor=null;
+      for(let k=desde;k<hasta && k<idxs3d.length;k++){
+        const i=idxs3d[k];
+        grupo.forEach(o=>{ const s0=o.s[i];
+          if(mejor===null || PRIOR.indexOf(s0)<PRIOR.indexOf(mejor)) mejor=s0; });
+      }
+      bloques.push(mejor);
+    }
+    return bloques;
+  }
+
+  const cargadoresHTML = Object.values(porCargador).map(grupo=>{
+    const tira = idxs3d.length ? franjaCargador(grupo).map(s0=>{
+      const idx = s0===null ? 4 : estIdx(s0);
+      return `<span style="display:inline-block;width:8px;height:14px;margin-right:1px;`+
+        `background:${s0===null?'#22405e':COLX[idx]}" title="${s0===null?'sin datos':ESTX[idx]}"></span>`;
+    }).join('') : '<span style="color:#5f7d9c">(sin historial suficiente)</span>';
+    const kwG = grupo.reduce((a,o)=>a+(+o.kw||0),0);
+    const conLista = grupo.map(o=>{
+      const idx=estIdx(ahora(o));
+      return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">`+
+        `<span class="dot" style="background:${COLX[idx]}"></span>`+
+        `<span style="color:#8fa8c2">#${o.id}</span> ${o.es} · ${o.kw} kW `+
+        `<span style="margin-left:auto;color:${COLX[idx]}">${ESTX[idx]}</span></div>`;
+    }).join('');
+    return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #22405e">`+
+      `<div style="color:#8fa8c2;font-size:11px">Cargador · ${grupo.length} `+
+      `conector${grupo.length>1?'es':''} · ${kwG} kW</div>`+
+      conLista+
+      `<div style="margin-top:4px">${tira}</div>`+
+      `<div style="color:#5f7d9c;font-size:10px;margin-top:2px">actividad últimos 3 días (por cargador)</div>`+
+      `</div>`;
+  }).join('');
+
+  const detalle = cons.length>1
+    ? `<div style="margin-top:6px;color:#8fa8c2;font-size:11px">${cons[0].dir||''}`+
+      (cons[0].dx?` · distribuidora ${cons[0].dx}`:'')+
+      ` · ${Object.keys(porCargador).length} cargadores · ${cons.length} conectores</div>`
+    : '';
+
+  return `<div style="max-width:280px">`+
+    `<b>${s.n}</b><br><span style="color:#8fa8c2">${s.cm} · ${s.op}</span>`+
+    detalle+
+    `<div style="margin-top:6px">Cargando: <b>${s.o}</b> de ${s.t} · `+
+    `Potencia total <b>${kwTot}</b> kW</div>`+
+    `<div style="max-height:260px;overflow-y:auto">${cargadoresHTML}</div>`+
+    `</div>`;
+}
 async function cargarLive(){
   try{
     LV = await traerJSON(LIVE_URL+'?t='+Date.now());
@@ -1590,15 +1829,17 @@ function pintarLive(){
       : `<circle cx="${L/2}" cy="${L/2}" r="${R-1.5}" fill="${col}"
            fill-opacity="${op}" stroke="${col}" stroke-width="1.5"/>`;
     L2marker([s.la,s.lo], L, forma, [2000,1000,0][tier])
-     .bindPopup(`<b>${s.n}</b><br><span style="color:#8fa8c2">${s.cm} · ${s.op}</span><br>`+
-       `Cargando: <b>${s.o}</b> de ${s.t}<br>Disponibles: ${s.d}`).addTo(llayer);
+     .bindPopup(()=>popupSitioLive(s), {maxWidth:300}).addTo(llayer);
   });
+  drawLegendLive();
   setTimeout(()=>lmap.invalidateSize(),80);
 
-  chart('lPie',{type:'doughnut',data:{labels:EST,
-    datasets:[{data:EST.map(k=>e[k]||0),backgroundColor:COL,
-      borderColor:c('--panel'),borderWidth:2}]},
-    options:{cutout:'58%',plugins:{legend:{position:'right'}}}});
+  chart('lPie',{type:'bar',data:{labels:EST,
+    datasets:[{data:EST.map(k=>e[k]||0),backgroundColor:COL}]},
+    options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{
+      label:x=>` ${x.raw.toLocaleString('es-CL')} conectores `+
+        `(${(100*x.raw/(LV.total||1)).toFixed(1)}%)`}}},
+      scales:{x:{title:{display:true,text:'conectores'}}}}});
 
   const mk=(id,arr,lbl)=>{
     const t=(arr||[]).slice(0,10);

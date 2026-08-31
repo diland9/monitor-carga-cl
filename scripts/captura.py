@@ -137,6 +137,10 @@ CAMPOS_META = {
     "la": "latitud", "lo": "longitud", "pr": "precio_clp_kwh",
     "lid": "location_id", "mk": "marca", "dx": "empresa_distribuidora",
     "irve": "folio_IRVE", "pv": "institucion_privada", "dir": "direccion",
+    # evse_uid identifica el CARGADOR fisico: un mismo cargador puede tener
+    # varios conectores (p.ej. CCS + CHAdeMO en el mismo pedestal). Sin esto
+    # el dashboard no puede distinguir "conector" de "cargador".
+    "ev": "evse_uid",
 }
 
 # Operadores de prueba que el registro publica pero no corresponden a
@@ -179,7 +183,7 @@ def escribir_meta(df, ids, destino):
                     d[corto] = None
             elif corto in ("kw", "pr"):
                 d[corto] = float(v)
-            elif corto in ("lid", "irve"):
+            elif corto in ("lid", "irve", "ev"):
                 d[corto] = int(v)
             elif corto == "pv":
                 d[corto] = bool(v)
@@ -375,7 +379,10 @@ def main():
             .sort_values("ocup", ascending=False).head(40).itertuples()
         ],
         "mapa": [
-            {"la": float(r.latitud), "lo": float(r.longitud),
+            # "lid" (location_id) permite cruzar cada sitio con el detalle por
+            # conector que ya trae el historico, para armar un popup rico sin
+            # duplicar aqui toda la metadata de cada conector.
+            {"lid": int(r.location_id), "la": float(r.latitud), "lo": float(r.longitud),
              "n": str(r.location_nombre)[:60], "cm": str(r.comuna),
              "op": str(r.opc), "t": int(r.n), "o": int(r.ocup),
              "d": int(r.disp), "kb": int(r.kb), "pv": bool(r.priv)}
