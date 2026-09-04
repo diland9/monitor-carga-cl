@@ -1,17 +1,17 @@
 {
- "generado": "2026-09-03 06:01",
- "ventana": "2026-08-22 00:30 a 2026-09-03 06:00",
- "horas": 293.49,
- "capturas": 3422,
+ "generado": "2026-09-04 05:51",
+ "ventana": "2026-08-22 00:30 a 2026-09-04 05:50",
+ "horas": 317.32,
+ "capturas": 3715,
  "conectores": 2273,
- "inmoviles": 1314,
+ "inmoviles": 1304,
  "inmoviles_detalle": {
-  "DISPONIBLE": 120,
+  "DISPONIBLE": 114,
   "OCUPADO": 7,
-  "FUERA DE LINEA": 791,
+  "FUERA DE LINEA": 787,
   "NO DISPONIBLE": 396
  },
- "fu_global": 12.04,
- "horas_cargando": 30504.9,
- "pct_fuera_linea": 41.49
+ "fu_global": 12.02,
+ "horas_cargando": 33188.4,
+ "pct_fuera_linea": 41.38
 }
