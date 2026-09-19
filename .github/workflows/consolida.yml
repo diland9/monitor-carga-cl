@@ -13,8 +13,6 @@ concurrency:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   consolidar:
@@ -44,20 +42,3 @@ jobs:
           fi
           git commit -m "consolidacion $(TZ=America/Santiago date '+%Y-%m-%d')"
           git pull --rebase --autostash && git push
-
-  desplegar:
-    needs: consolidar
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
-      - id: deployment
-        uses: actions/deploy-pages@v4
