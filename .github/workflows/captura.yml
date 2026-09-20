@@ -41,6 +41,12 @@ jobs:
         run: |
           git config user.name  "monitor-carga[bot]"
           git config user.email "monitor-carga@users.noreply.github.com"
+          # docs/data/*.json(.gz) se reescriben enteros cada corrida: si dos
+          # corridas quedan cerca, un rebase normal choca en esos archivos.
+          # merge=ours (declarado en .gitattributes) hace que ante un
+          # conflicto ahi se prefiera lo que ya esta en el remoto, que se
+          # vuelve a regenerar igual en el siguiente ciclo.
+          git config merge.ours.driver true
           git add serie estado metadatos docs/data
           if git diff --staged --quiet; then
             echo "sin cambios que publicar"

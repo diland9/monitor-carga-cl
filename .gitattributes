@@ -1,0 +1,9 @@
+# docs/data/*.json y *.json.gz se reescriben enteros en cada corrida de
+# captura/consolidacion — no tiene sentido intentar mezclar su contenido
+# linea a linea si dos corridas chocan al hacer rebase. Ante un conflicto,
+# se queda con la version que ya esta en el remoto (mas reciente que la que
+# traia el commit que se esta reaplicando), y esta se vuelve a regenerar
+# igual en el siguiente ciclo. Requiere `git config merge.ours.driver true`
+# en cada checkout (ver captura.yml / consolida.yml).
+docs/data/*.json merge=ours
+docs/data/*.json.gz merge=ours
