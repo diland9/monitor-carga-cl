@@ -1,12 +1,14 @@
 name: Captura
 
-# El minimo de GitHub Actions es 5 minutos. El cron NO es puntual: se retrasa
-# habitualmente y bajo carga alta GitHub omite corridas. El analisis lo tolera
-# porque cada captura se pondera por los minutos que realmente representa.
+# El cron nativo de GitHub Actions (`schedule:`) resulto muy poco confiable en
+# la practica: desde el primer dia el intervalo real fue de 15-45 min en vez
+# de 5, y con el tiempo se degrado a brechas de horas. La cadencia real ahora
+# la da un disparador externo (Cloud Scheduler) que llama a este workflow por
+# workflow_dispatch cada 5 min. Se saco el `schedule:` de aqui a proposito:
+# dejarlo ademas del disparo externo solo genera corridas duplicadas que
+# compiten por el mismo push y a veces chocan (rebase conflict).
 on:
-  schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:        # permite disparar a mano desde la pestana Actions
+  workflow_dispatch:        # disparado por Cloud Scheduler cada 5 min; tambien permite correrlo a mano
 
 # Evita que dos corridas se pisen al hacer push sobre la misma rama.
 concurrency:
