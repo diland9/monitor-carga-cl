@@ -1,8 +1,8 @@
 {
- "generado": "2026-09-28 07:53",
- "ventana": "2026-08-22 00:30 a 2026-09-28 07:50",
- "horas": 895.33,
- "capturas": 12421,
+ "generado": "2026-09-29 07:29",
+ "ventana": "2026-08-22 00:30 a 2026-09-29 07:25",
+ "horas": 918.91,
+ "capturas": 12986,
  "conectores": 2298,
  "inmoviles": 1205,
  "inmoviles_detalle": {
@@ -11,7 +11,7 @@
   "FUERA DE LINEA": 740,
   "NO DISPONIBLE": 383
  },
- "fu_global": 11.73,
- "horas_cargando": 97703.7,
- "pct_fuera_linea": 39.94
+ "fu_global": 11.72,
+ "horas_cargando": 100362.1,
+ "pct_fuera_linea": 39.93
 }
