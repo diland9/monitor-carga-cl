@@ -7,3 +7,10 @@
 # en cada checkout (ver captura.yml / consolida.yml).
 docs/data/*.json merge=ours
 docs/data/*.json.gz merge=ours
+
+# metadatos/<dia>.parquet y estado/historial_ids.json se (re)generan al cambiar
+# el dia: si dos corridas lo crean casi a la vez, chocan en el rebase y el
+# bucle de reintento quedaba atascado (falla del 2026-10-03 03:05). Ambas
+# versiones son equivalentes, asi que ante conflicto se queda la del remoto.
+metadatos/*.parquet merge=ours
+estado/historial_ids.json merge=ours
