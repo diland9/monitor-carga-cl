@@ -56,6 +56,9 @@ jobs:
           # Reintenta si otra corrida hizo push mientras tanto
           for i in 1 2 3; do
             git pull --rebase --autostash && git push && exit 0
+            # un rebase a medias deja el arbol "unmerged" y todos los reintentos
+            # siguientes fallan; se aborta para que el proximo parta limpio
+            git rebase --abort 2>/dev/null || true
             echo "reintento $i"
             sleep 5
           done
